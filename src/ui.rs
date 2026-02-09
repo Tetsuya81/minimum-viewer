@@ -10,6 +10,8 @@ use crate::app::{App, Mode};
 
 const MAX_PATH_WIDTH: u16 = 80;
 const CMD_CANDIDATE_ROWS: u16 = 6;
+const INPUT_ROWS: u16 = 3;
+const SHELL_PANEL_ROWS: u16 = 6;
 
 fn truncate_to_width(s: &str, width: u16) -> String {
     let w = width as usize;
@@ -44,13 +46,14 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Command => vec![
             Constraint::Length(2),
             Constraint::Min(3),
-            Constraint::Length(1),
+            Constraint::Length(INPUT_ROWS),
             Constraint::Length(CMD_CANDIDATE_ROWS),
         ],
         Mode::Shell => vec![
             Constraint::Length(2),
             Constraint::Min(3),
-            Constraint::Length(1),
+            Constraint::Length(INPUT_ROWS),
+            Constraint::Length(SHELL_PANEL_ROWS),
         ],
         Mode::Browse => vec![
             Constraint::Length(2),
@@ -165,6 +168,18 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .block(shell_block)
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(shell_para, chunks[2]);
+
+        let panel_block = Block::default()
+            .title(Line::from(" shell "))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(Color::DarkGray));
+        let panel_body = "Enter: run shell command\nEsc: cancel";
+        let panel_para = Paragraph::new(panel_body)
+            .block(panel_block)
+            .style(Style::default().fg(Color::Gray))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(panel_para, chunks[3]);
     } else {
         let status = if !app.status_message.is_empty() {
             app.status_message.clone()
