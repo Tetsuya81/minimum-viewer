@@ -1,0 +1,24 @@
+{"location":""main.rs:main"","message":""app start"","data":{"phase":"start"},"timestamp":1770623110791,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623110793,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"13","selected_index":"0"},"timestamp":1770623110793,"hypothesisId":"H2"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"quit","command_selected":"0"},"timestamp":1770623121357,"hypothesisId":"H3"}
+{"location":""main.rs:main"","message":""app exit"","data":{"quit":"true"},"timestamp":1770623121357,"hypothesisId":"H1"}
+{"location":""main.rs:main"","message":""app start"","data":{"phase":"start"},"timestamp":1770623131319,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623131320,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"13","selected_index":"0"},"timestamp":1770623131320,"hypothesisId":"H2"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"1","cmd":"mkdir","command_selected":"0"},"timestamp":1770623140195,"hypothesisId":"H3"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"help","command_selected":"6"},"timestamp":1770623158628,"hypothesisId":"H3"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"quit","command_selected":"0"},"timestamp":1770623162293,"hypothesisId":"H3"}
+{"location":""main.rs:main"","message":""app exit"","data":{"quit":"true"},"timestamp":1770623162295,"hypothesisId":"H1"}
+{"location":""main.rs:main"","message":""app start"","data":{"phase":"start"},"timestamp":1770623168639,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623168640,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"13","selected_index":"0"},"timestamp":1770623168640,"hypothesisId":"H2"}
+{"location":""app.rs:open_selected"","message":""open dir"","data":{"path":"/Users/tetsuya81/dev/MyGithub/minimum-viewer/target"},"timestamp":1770623173894,"hypothesisId":"H4"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer/target"},"timestamp":1770623173895,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"4","selected_index":"3"},"timestamp":1770623173895,"hypothesisId":"H2"}
+{"location":""app.rs:open_selected"","message":""open dir"","data":{"path":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623179468,"hypothesisId":"H4"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623179469,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"13","selected_index":"0"},"timestamp":1770623179470,"hypothesisId":"H2"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"mkdir","command_selected":"3"},"timestamp":1770623210650,"hypothesisId":"H3"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"1","cmd":"quit","command_selected":"0"},"timestamp":1770623213761,"hypothesisId":"H3"}
+{"location":""main.rs:main"","message":""app exit"","data":{"quit":"true"},"timestamp":1770623213761,"hypothesisId":"H1"}

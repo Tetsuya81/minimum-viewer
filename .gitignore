@@ -1,0 +1,20 @@
+# Nix
+result
+result-*
+
+# direnv
+.direnv/
+
+# Rust
+/target/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+
+# Added by cargo
+
+/target
