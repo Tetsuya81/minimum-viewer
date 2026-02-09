@@ -158,8 +158,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
         cand_state.select(Some(app.command_selected));
         frame.render_stateful_widget(cand_list, chunks[3], &mut cand_state);
     } else {
-        let status = app
-            .selected_entry()
+        let status = if !app.status_message.is_empty() {
+            app.status_message.clone()
+        } else {
+            app.selected_entry()
             .map(|e| {
                 let kind = if e.is_dir { "dir" } else { "file" };
                 let size = e
@@ -168,7 +170,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
                     .unwrap_or_else(|| "-".to_string());
                 format!(" {}  {}  {}", e.name, kind, size)
             })
-            .unwrap_or_else(|| app.status_message.clone());
+            .unwrap_or_default()
+        };
         let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
         let hint = " j/k: move  Enter: open  : command  q: quit ";
         let block = Block::default()

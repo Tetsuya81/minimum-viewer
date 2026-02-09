@@ -144,36 +144,56 @@ impl App {
     }
 
     pub fn execute_selected_command(&mut self) -> bool {
+        let input_cmd = self.command_input.trim().to_lowercase();
         // #region agent log
         let cand_len = self.command_candidates.len();
         let sel = self.command_selected;
         let cmd_opt = self.command_candidates.get(self.command_selected).map(|s| s.as_str()).unwrap_or("(none)");
         crate::debug_log::log("app.rs:execute_selected_command", "entry", BTreeMap::from([
+            ("input", input_cmd.clone()),
             ("candidates_len", cand_len.to_string()),
             ("command_selected", sel.to_string()),
             ("cmd", cmd_opt.to_string()),
         ]), "H3");
         // #endregion
-        let cmd = self.command_candidates.get(self.command_selected).cloned();
+        let cmd = if !input_cmd.is_empty() && COMMAND_LIST.contains(&input_cmd.as_str()) {
+            Some(input_cmd)
+        } else {
+            self.command_candidates.get(self.command_selected).cloned()
+        };
         self.exit_command_mode();
         match cmd.as_deref() {
             Some("quit") => return true,
+            Some("open") => self.open_selected(),
             Some("cd") => {
-                if let Some(ent) = self.selected_entry() {
-                    if ent.is_dir {
+                if let Some((path, name, is_dir)) = self
+                    .selected_entry()
+                    .map(|e| (e.path.clone(), e.name.clone(), e.is_dir))
+                {
+                    if is_dir {
                         // #region agent log
-                        crate::debug_log::log("app.rs:execute_selected_command", "cd target", BTreeMap::from([("path", ent.path.to_string_lossy().to_string())]), "H4");
+                        crate::debug_log::log("app.rs:execute_selected_command", "cd target", BTreeMap::from([("path", path.to_string_lossy().to_string())]), "H4");
                         // #endregion
-                        self.current_dir = ent.path.clone();
+                        self.current_dir = path;
                         self.reload_entries();
                         self.selected_index = 0;
+                        self.status_message = format!("cd: {}", self.current_dir.display());
+                    } else {
+                        self.status_message = format!("cd: '{}' is not a directory", name);
                     }
+                } else {
+                    self.status_message = "cd: no selection".to_string();
                 }
             }
+            Some("mkdir") => self.status_message = "mkdir: not implemented".to_string(),
+            Some("delete") => self.status_message = "delete: not implemented".to_string(),
+            Some("rename") => self.status_message = "rename: not implemented".to_string(),
             Some("help") => {
-                self.status_message = "j/k: move  Enter: open  :: command  q: quit".to_string();
+                self.status_message =
+                    "commands: quit, cd, open, mkdir, delete, rename, help".to_string();
             }
-            _ => {}
+            Some(other) => self.status_message = format!("unknown command: {}", other),
+            None => self.status_message = "no matching command".to_string(),
         }
         false
     }

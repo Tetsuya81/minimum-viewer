@@ -22,3 +22,16 @@
 {"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"mkdir","command_selected":"3"},"timestamp":1770623210650,"hypothesisId":"H3"}
 {"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"1","cmd":"quit","command_selected":"0"},"timestamp":1770623213761,"hypothesisId":"H3"}
 {"location":""main.rs:main"","message":""app exit"","data":{"quit":"true"},"timestamp":1770623213761,"hypothesisId":"H1"}
+{"location":""main.rs:main"","message":""app start"","data":{"phase":"start"},"timestamp":1770623502513,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623502514,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"13","selected_index":"0"},"timestamp":1770623502514,"hypothesisId":"H2"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"mkdir","command_selected":"3","input":""},"timestamp":1770623511795,"hypothesisId":"H3"}
+{"location":""app.rs:open_selected"","message":""open dir"","data":{"path":"/Users/tetsuya81/dev/MyGithub"},"timestamp":1770623569013,"hypothesisId":"H4"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub"},"timestamp":1770623569014,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"6","selected_index":"0"},"timestamp":1770623569015,"hypothesisId":"H2"}
+{"location":""app.rs:open_selected"","message":""open dir"","data":{"path":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623570939,"hypothesisId":"H4"}
+{"location":""app.rs:reload_entries"","message":""entry"","data":{"dir":"/Users/tetsuya81/dev/MyGithub/minimum-viewer"},"timestamp":1770623570939,"hypothesisId":"H1"}
+{"location":""app.rs:reload_entries"","message":""after clamp"","data":{"entries_len":"14","selected_index":"1"},"timestamp":1770623570940,"hypothesisId":"H2"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"rename","command_selected":"5","input":""},"timestamp":1770623586224,"hypothesisId":"H3"}
+{"location":""app.rs:execute_selected_command"","message":""entry"","data":{"candidates_len":"7","cmd":"open","command_selected":"2","input":""},"timestamp":1770623592257,"hypothesisId":"H3"}
+{"location":""main.rs:main"","message":""app exit"","data":{"quit":"true"},"timestamp":1770623597638,"hypothesisId":"H1"}
