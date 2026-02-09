@@ -6,7 +6,7 @@ use std::process::Command;
 use crate::command;
 use crate::command::types::CommandId;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Browse,
     Filter,
@@ -176,8 +176,7 @@ impl App {
 
     pub fn exit_filter_mode(&mut self, clear: bool) {
         if clear {
-            self.filter_input.clear();
-            self.apply_entry_filter();
+            self.clear_filter();
         }
         self.mode = Mode::Browse;
     }
@@ -190,6 +189,20 @@ impl App {
     pub fn filter_pop_char(&mut self) {
         self.filter_input.pop();
         self.apply_entry_filter();
+    }
+
+    pub fn clear_filter(&mut self) {
+        self.filter_input.clear();
+        self.apply_entry_filter();
+    }
+
+    pub fn on_directory_changed(&mut self, new_dir: PathBuf) {
+        self.current_dir = new_dir;
+        self.mode = Mode::Browse;
+        self.clear_filter();
+        self.reload_entries();
+        self.selected_index = 0;
+        self.sync_cwd_env();
     }
 
     pub fn enter_command_mode(&mut self) {
@@ -337,10 +350,7 @@ impl App {
                     BTreeMap::from([("path", ent.path.to_string_lossy().to_string())]),
                     "H4",
                 );
-                self.current_dir = ent.path;
-                self.reload_entries();
-                self.selected_index = 0;
-                self.sync_cwd_env();
+                self.on_directory_changed(ent.path);
             } else {
                 self.status_message = format!("File: {} (open not implemented)", ent.name);
             }
@@ -492,5 +502,27 @@ mod tests {
 
         assert_eq!(app.entries.len(), 2);
         assert_eq!(app.selected_index, 1);
+    }
+
+    #[test]
+    fn on_directory_changed_resets_filter_and_mode() {
+        let base = std::env::temp_dir().join(format!("minimum-viewer-test-{}", std::process::id()));
+        let sub = base.join("sub");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&sub).expect("create temp dirs");
+
+        let mut app = test_app();
+        app.mode = Mode::Filter;
+        app.filter_input = "src".to_string();
+        app.selected_index = 3;
+
+        app.on_directory_changed(sub.clone());
+
+        assert_eq!(app.mode, Mode::Browse);
+        assert!(app.filter_input.is_empty());
+        assert_eq!(app.selected_index, 0);
+        assert_eq!(app.current_dir, sub);
+
+        let _ = std::fs::remove_dir_all(base);
     }
 }
