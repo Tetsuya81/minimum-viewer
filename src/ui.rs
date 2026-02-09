@@ -87,7 +87,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .wrap(Wrap { trim: false });
     frame.render_widget(path_para, chunks[0]);
 
-    let list_title = format!(" files ({}/{}) ", app.entries.len(), app.all_entries.len());
+    let visible_children = app.entries.iter().filter(|e| e.name != "..").count();
+    let total_children = app.all_entries.iter().filter(|e| e.name != "..").count();
+    let list_title = format!(" files ({}/{}) ", visible_children, total_children);
     let list_block = Block::default()
         .title(Line::from(list_title))
         .borders(Borders::ALL)
@@ -103,8 +105,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 .size
                 .map(|s| format!(" {:>8}", human_size(s)))
                 .unwrap_or_default();
-            let name = truncate_to_width(&e.name, width.saturating_sub(6));
-            let line = format!("{}{}{}", icon, name, size_str);
+            let indent = if e.name == ".." { "" } else { "  " };
+            let name = truncate_to_width(&e.name, width.saturating_sub(8));
+            let line = format!("{}{}{}{}", indent, icon, name, size_str);
             let style =
                 if i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter) {
                     Style::default()
@@ -217,7 +220,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 .unwrap_or_default()
         };
         let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
-        let hint = " j/k: move  Enter: open  /: filter  : command  ! shell  q: quit ";
+        let hint =
+            " j/k: move  Enter: open  Del/Bs: parent  /: filter  : command  ! shell  q: quit ";
         let block = Block::default()
             .title(Line::from(hint))
             .borders(Borders::ALL)

@@ -39,6 +39,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Esc => app.exit_filter_mode(true),
                             KeyCode::Enter => app.exit_filter_mode(false),
                             KeyCode::Backspace => app.filter_pop_char(),
+                            KeyCode::Delete => app.move_to_parent_directory(),
                             KeyCode::Up | KeyCode::Down => {
                                 if key.code == KeyCode::Up {
                                     app.move_selection_up();
@@ -74,6 +75,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char(':') => app.enter_command_mode(),
                             KeyCode::Char('!') => app.enter_shell_mode(),
                             KeyCode::Char('/') => app.enter_filter_mode(),
+                            KeyCode::Delete | KeyCode::Backspace => app.move_to_parent_directory(),
                             KeyCode::Enter => app.open_selected(),
                             KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),
                             KeyCode::Down | KeyCode::Char('j') => app.move_selection_down(),

@@ -205,6 +205,17 @@ impl App {
         self.sync_cwd_env();
     }
 
+    pub fn move_to_parent_directory(&mut self) {
+        self.mode = Mode::Browse;
+        self.clear_filter();
+        if let Some(parent) = self.current_dir.parent() {
+            self.on_directory_changed(parent.to_path_buf());
+            self.status_message = format!("cd: {}", self.current_dir.display());
+        } else {
+            self.status_message = "cd: parent directory not found".to_string();
+        }
+    }
+
     pub fn enter_command_mode(&mut self) {
         self.mode = Mode::Command;
         self.command_input.clear();
@@ -524,5 +535,44 @@ mod tests {
         assert_eq!(app.current_dir, sub);
 
         let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn move_to_parent_directory_moves_when_parent_exists() {
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-parent-{}", std::process::id()));
+        let sub = base.join("sub");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&sub).expect("create temp dirs");
+
+        let mut app = test_app();
+        app.current_dir = sub.clone();
+        app.mode = Mode::Filter;
+        app.filter_input = "tmp".to_string();
+
+        app.move_to_parent_directory();
+
+        assert_eq!(app.current_dir, base);
+        assert_eq!(app.mode, Mode::Browse);
+        assert!(app.filter_input.is_empty());
+        assert!(app.status_message.starts_with("cd: "));
+
+        let _ = std::fs::remove_dir_all(sub);
+        let _ = std::fs::remove_dir_all(app.current_dir.clone());
+    }
+
+    #[test]
+    fn move_to_parent_directory_sets_message_when_parent_missing() {
+        let mut app = test_app();
+        app.current_dir = PathBuf::from("/");
+        app.mode = Mode::Filter;
+        app.filter_input = "tmp".to_string();
+
+        app.move_to_parent_directory();
+
+        assert_eq!(app.current_dir, PathBuf::from("/"));
+        assert_eq!(app.mode, Mode::Browse);
+        assert!(app.filter_input.is_empty());
+        assert_eq!(app.status_message, "cd: parent directory not found");
     }
 }
