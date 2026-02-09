@@ -55,8 +55,13 @@ pub fn draw(frame: &mut Frame, app: &App) {
             Constraint::Length(INPUT_ROWS),
             Constraint::Length(SHELL_PANEL_ROWS),
         ],
+        Mode::Filter => vec![
+            Constraint::Length(3),
+            Constraint::Min(3),
+            Constraint::Length(INPUT_ROWS),
+        ],
         Mode::Browse => vec![
-            Constraint::Length(2),
+            Constraint::Length(3),
             Constraint::Min(3),
             Constraint::Length(2),
         ],
@@ -67,9 +72,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .split(area);
 
     let path_width = width.saturating_sub(4).min(MAX_PATH_WIDTH);
-    let path_display = truncate_to_width(app.current_dir.to_string_lossy().as_ref(), path_width);
+    let path_display = truncate_to_width(
+        format!("📁 {}", app.current_dir.to_string_lossy()).as_str(),
+        path_width,
+    );
     let path_block = Block::default()
-        .title(Line::from(" path "))
+        .title(Line::from(" current directory "))
         .borders(Borders::ALL)
         .border_set(symbols::border::ROUNDED)
         .border_style(Style::default().fg(Color::Cyan));
@@ -79,8 +87,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .wrap(Wrap { trim: false });
     frame.render_widget(path_para, chunks[0]);
 
+    let list_title = format!(" files ({}/{}) ", app.entries.len(), app.all_entries.len());
     let list_block = Block::default()
-        .title(Line::from(" files "))
+        .title(Line::from(list_title))
         .borders(Borders::ALL)
         .border_set(symbols::border::ROUNDED)
         .border_style(Style::default().fg(Color::Cyan));
@@ -96,14 +105,15 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 .unwrap_or_default();
             let name = truncate_to_width(&e.name, width.saturating_sub(6));
             let line = format!("{}{}{}", icon, name, size_str);
-            let style = if i == app.selected_index && app.mode == Mode::Browse {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
+            let style =
+                if i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter) {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
             ListItem::new(line).style(style)
         })
         .collect();
@@ -180,6 +190,17 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .style(Style::default().fg(Color::Gray))
             .wrap(Wrap { trim: false });
         frame.render_widget(panel_para, chunks[3]);
+    } else if app.mode == Mode::Filter {
+        let filter_line = format!("/{}", app.filter_input);
+        let filter_block = Block::default()
+            .title(Line::from(" filter (/): Enter apply Esc clear "))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(Color::Yellow));
+        let filter_para = Paragraph::new(filter_line)
+            .block(filter_block)
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(filter_para, chunks[2]);
     } else {
         let status = if !app.status_message.is_empty() {
             app.status_message.clone()
@@ -196,7 +217,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 .unwrap_or_default()
         };
         let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
-        let hint = " j/k: move  Enter: open  : command  ! shell  q: quit ";
+        let hint = " j/k: move  Enter: open  /: filter  : command  ! shell  q: quit ";
         let block = Block::default()
             .title(Line::from(hint))
             .borders(Borders::ALL)

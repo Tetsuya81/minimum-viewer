@@ -17,6 +17,7 @@ pub fn run(app: &mut App) -> bool {
             app.current_dir = path;
             app.reload_entries();
             app.selected_index = 0;
+            app.sync_cwd_env();
             app.status_message = format!("cd: {}", app.current_dir.display());
         } else {
             app.status_message = format!("cd: '{}' is not a directory", name);

@@ -9,10 +9,12 @@ use crate::command::types::CommandId;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Browse,
+    Filter,
     Command,
     Shell,
 }
 
+#[derive(Clone)]
 pub struct DirEntry {
     pub name: String,
     pub path: PathBuf,
@@ -23,8 +25,10 @@ pub struct DirEntry {
 pub struct App {
     pub mode: Mode,
     pub current_dir: PathBuf,
+    pub all_entries: Vec<DirEntry>,
     pub entries: Vec<DirEntry>,
     pub selected_index: usize,
+    pub filter_input: String,
     pub command_input: String,
     pub command_candidates: Vec<String>,
     pub command_selected: usize,
@@ -47,8 +51,10 @@ impl App {
         let mut app = Self {
             mode: Mode::Browse,
             current_dir,
+            all_entries: Vec::new(),
             entries: Vec::new(),
             selected_index: 0,
+            filter_input: String::new(),
             command_input: String::new(),
             command_candidates: command::filter_candidates(""),
             command_selected: 0,
@@ -58,11 +64,11 @@ impl App {
             status_message: String::new(),
         };
         app.reload_entries();
+        app.sync_cwd_env();
         app
     }
 
     pub fn reload_entries(&mut self) {
-        // #region agent log
         let dir_str = self.current_dir.to_string_lossy().to_string();
         crate::debug_log::log(
             "app.rs:reload_entries",
@@ -70,38 +76,70 @@ impl App {
             BTreeMap::from([("dir", dir_str)]),
             "H1",
         );
-        // #endregion
-        self.entries = match read_sorted_entries(&self.current_dir) {
+
+        self.all_entries = match read_sorted_entries(&self.current_dir) {
             Ok(entries) => entries,
             Err(e) => {
-                // #region agent log
                 crate::debug_log::log(
                     "app.rs:reload_entries",
                     "read_sorted_entries failed",
                     BTreeMap::from([("err", e.to_string())]),
                     "H1",
                 );
-                // #endregion
                 self.status_message = format!("Error: {}", e);
                 Vec::new()
             }
         };
-        if self.selected_index >= self.entries.len() && !self.entries.is_empty() {
-            self.selected_index = self.entries.len() - 1;
-        } else if self.entries.is_empty() {
-            self.selected_index = 0;
-        }
-        // #region agent log
+
+        self.apply_entry_filter();
+
         crate::debug_log::log(
             "app.rs:reload_entries",
-            "after clamp",
+            "after filter",
             BTreeMap::from([
+                ("all_entries_len", self.all_entries.len().to_string()),
                 ("entries_len", self.entries.len().to_string()),
                 ("selected_index", self.selected_index.to_string()),
             ]),
             "H2",
         );
-        // #endregion
+    }
+
+    pub fn apply_entry_filter(&mut self) {
+        let normalized = self.filter_input.trim().to_lowercase();
+        let show_all = normalized.is_empty();
+
+        self.entries = self
+            .all_entries
+            .iter()
+            .filter(|entry| {
+                if entry.name == ".." {
+                    return true;
+                }
+                if show_all {
+                    return true;
+                }
+                entry.name.to_lowercase().contains(&normalized)
+            })
+            .cloned()
+            .collect();
+
+        self.clamp_selected_index();
+    }
+
+    fn clamp_selected_index(&mut self) {
+        if self.selected_index >= self.entries.len() && !self.entries.is_empty() {
+            self.selected_index = self.entries.len() - 1;
+        } else if self.entries.is_empty() {
+            self.selected_index = 0;
+        }
+    }
+
+    pub fn sync_cwd_env(&self) {
+        std::env::set_var(
+            "MINIMUM_VIEWER_CWD",
+            self.current_dir.to_string_lossy().as_ref(),
+        );
     }
 
     pub fn selected_entry(&self) -> Option<&DirEntry> {
@@ -130,6 +168,28 @@ impl App {
         if self.selected_index + 1 < self.entries.len() {
             self.selected_index += 1;
         }
+    }
+
+    pub fn enter_filter_mode(&mut self) {
+        self.mode = Mode::Filter;
+    }
+
+    pub fn exit_filter_mode(&mut self, clear: bool) {
+        if clear {
+            self.filter_input.clear();
+            self.apply_entry_filter();
+        }
+        self.mode = Mode::Browse;
+    }
+
+    pub fn filter_push_char(&mut self, c: char) {
+        self.filter_input.push(c);
+        self.apply_entry_filter();
+    }
+
+    pub fn filter_pop_char(&mut self) {
+        self.filter_input.pop();
+        self.apply_entry_filter();
     }
 
     pub fn enter_command_mode(&mut self) {
@@ -167,7 +227,6 @@ impl App {
 
     pub fn execute_selected_command(&mut self) -> bool {
         let input_cmd = self.command_input.trim().to_string();
-        // #region agent log
         let cand_len = self.command_candidates.len();
         let sel = self.command_selected;
         let cmd_opt = self
@@ -186,7 +245,7 @@ impl App {
             ]),
             "H3",
         );
-        // #endregion
+
         let cmd =
             command::resolve_command(&input_cmd, self.command_selected, &self.command_candidates);
         self.exit_command_mode();
@@ -270,24 +329,22 @@ impl App {
             }
             return;
         }
-        if let Some(ent) = self.selected_entry() {
+        if let Some(ent) = self.selected_entry().cloned() {
             if ent.is_dir {
-                // #region agent log
                 crate::debug_log::log(
                     "app.rs:open_selected",
                     "open dir",
                     BTreeMap::from([("path", ent.path.to_string_lossy().to_string())]),
                     "H4",
                 );
-                // #endregion
-                self.current_dir = ent.path.clone();
+                self.current_dir = ent.path;
                 self.reload_entries();
                 self.selected_index = 0;
+                self.sync_cwd_env();
             } else {
                 self.status_message = format!("File: {} (open not implemented)", ent.name);
             }
         } else {
-            // #region agent log
             crate::debug_log::log(
                 "app.rs:open_selected",
                 "no selected_entry",
@@ -297,7 +354,6 @@ impl App {
                 ]),
                 "H2",
             );
-            // #endregion
         }
     }
 }
@@ -345,4 +401,96 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
     }
 
     Ok(entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mk_entry(name: &str, is_dir: bool) -> DirEntry {
+        DirEntry {
+            name: name.to_string(),
+            path: PathBuf::from(name),
+            is_dir,
+            size: if is_dir { None } else { Some(1) },
+        }
+    }
+
+    fn test_app() -> App {
+        App {
+            mode: Mode::Browse,
+            current_dir: PathBuf::from("."),
+            all_entries: vec![],
+            entries: vec![],
+            selected_index: 0,
+            filter_input: String::new(),
+            command_input: String::new(),
+            command_candidates: vec![],
+            command_selected: 0,
+            shell_input: String::new(),
+            shell_last_output: None,
+            show_shell_popup: false,
+            status_message: String::new(),
+        }
+    }
+
+    #[test]
+    fn empty_filter_shows_all_entries() {
+        let mut app = test_app();
+        app.all_entries = vec![
+            mk_entry("..", true),
+            mk_entry("src", true),
+            mk_entry("README.md", false),
+        ];
+
+        app.apply_entry_filter();
+
+        assert_eq!(app.entries.len(), 3);
+    }
+
+    #[test]
+    fn filter_matches_contains_case_insensitive() {
+        let mut app = test_app();
+        app.all_entries = vec![
+            mk_entry("..", true),
+            mk_entry("Cargo.toml", false),
+            mk_entry("README.md", false),
+            mk_entry("src", true),
+        ];
+        app.filter_input = "reAd".to_string();
+
+        app.apply_entry_filter();
+
+        let names: Vec<&str> = app.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["..", "README.md"]);
+    }
+
+    #[test]
+    fn filter_keeps_parent_directory_entry() {
+        let mut app = test_app();
+        app.all_entries = vec![mk_entry("..", true), mk_entry("src", true)];
+        app.filter_input = "zzz".to_string();
+
+        app.apply_entry_filter();
+
+        assert_eq!(app.entries.len(), 1);
+        assert_eq!(app.entries[0].name, "..");
+    }
+
+    #[test]
+    fn filter_clamps_selection_index() {
+        let mut app = test_app();
+        app.all_entries = vec![
+            mk_entry("..", true),
+            mk_entry("src", true),
+            mk_entry("README.md", false),
+        ];
+        app.selected_index = 2;
+        app.filter_input = "src".to_string();
+
+        app.apply_entry_filter();
+
+        assert_eq!(app.entries.len(), 2);
+        assert_eq!(app.selected_index, 1);
+    }
 }
