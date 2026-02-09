@@ -1,0 +1,114 @@
+# UI名称ガイド
+
+## 1. 目的と対象読者
+
+このドキュメントは、UI改善時に「どの領域の話か」を明確にするための命名ルールです。  
+デザイン仕様そのものではなく、用語を統一するための参照資料です。
+
+対象読者:
+- UI改善Issueを書く人
+- 実装する人
+- レビューする人
+
+## 2. 画面座標と語彙ルール
+
+画面の座標は次の4領域で表現します。
+- `Top`: 画面上段
+- `Middle`: 画面中段
+- `Bottom`: 画面下段
+- `Popup`: オーバーレイ表示
+
+語彙ルール:
+- `Bar`: 1行入力や短い情報表示の横長領域
+- `Pane`: 複数行の主表示領域
+- `Panel`: 補助情報を表示する領域
+- `Popup`: モーダル的に重なる領域
+
+## 3. 共通領域の正式名称
+
+- `Current Directory Bar`
+  - 位置: `Top`
+  - 画面タイトル: `current directory`
+  - 役割: 現在ディレクトリ表示
+- `File List Pane`
+  - 位置: `Middle`
+  - 画面タイトル: `files (x/y)`
+  - 役割: エントリ一覧表示
+- `Shell Output Popup`
+  - 位置: `Popup`
+  - 画面タイトル: `shell output: ... (exit ...)`
+  - 役割: shell実行結果表示
+
+`Status Bar` は `Browse` モード時のみ `Bottom` に表示されます（モード別領域を参照）。
+
+## 4. モード別領域名称
+
+### Browse
+- `Status Bar`
+  - 位置: `Bottom`
+  - 画面タイトル: `Move : j/k | Command : ! | Filter : / | Shell : ':' | Quit : q`
+  - 内容: ステータスメッセージまたは選択中エントリ情報
+
+### Filter
+- `Filter Input Bar`
+  - 位置: `Bottom`
+  - 画面タイトル: `filter (/): Enter apply Esc clear`
+  - 内容: `/<query>`
+
+### Command
+- `Command Input Bar`
+  - 位置: `Bottom`
+  - 画面タイトル: `command (:): Enter run Esc cancel`
+  - 内容: `:<query>`
+- `Command Candidates Pane`
+  - 位置: `Bottom`（Command入力バーの下）
+  - 画面タイトル: `commands`
+  - 内容: コマンド候補一覧
+
+### Shell
+- `Shell Input Bar`
+  - 位置: `Bottom`
+  - 画面タイトル: `shell (!): Enter run Esc cancel`
+  - 内容: `!<command>`
+- `Shell Help Panel`
+  - 位置: `Bottom`（Shell入力バーの下）
+  - 画面タイトル: `shell`
+  - 内容: 実行ヒント（`Enter: run shell command` / `Esc: cancel`）
+
+## 5. 用語対応表
+
+| 正式名称 | 画面表示タイトル | コード上の描画箇所 | 表示条件 (Mode) |
+|---|---|---|---|
+| Current Directory Bar | `current directory` | `draw(): path_block / path_para` | 全Mode |
+| File List Pane | `files (x/y)` | `draw(): list_block / list` | 全Mode |
+| Status Bar | `Move : j/k | Command : ! | Filter : / | Shell : ':' | Quit : q` | `draw(): block / para` (Browse分岐) | `Mode::Browse` |
+| Filter Input Bar | `filter (/): Enter apply Esc clear` | `draw(): filter_block / filter_para` | `Mode::Filter` |
+| Command Input Bar | `command (:): Enter run Esc cancel` | `draw(): cmd_block / cmd_para` | `Mode::Command` |
+| Command Candidates Pane | `commands` | `draw(): cand_block / cand_list` | `Mode::Command` |
+| Shell Input Bar | `shell (!): Enter run Esc cancel` | `draw(): shell_block / shell_para` | `Mode::Shell` |
+| Shell Help Panel | `shell` | `draw(): panel_block / panel_para` | `Mode::Shell` |
+| Shell Output Popup | `shell output: ... (exit ...)` | `draw(): popup_area / popup para` | `app.show_shell_popup == true` |
+
+## 6. UI改善Issue/PR テンプレート
+
+Issue/PRには次の書式を使ってください。
+
+```md
+## UI変更対象
+- 対象領域: <正式名称>
+- 変更内容: レイアウト / 配色 / キー挙動 / 文言
+- 影響モード: Browse / Filter / Command / Shell
+
+## 受け入れ条件
+- 対象領域がこの命名ガイドで一意に参照できること
+- モード別表示条件に矛盾がないこと
+```
+
+## 7. 変更ルール
+
+- `src/ui.rs` のタイトル文字列を変更した場合は、必ずこのドキュメントを更新する。
+- 新しい表示領域を追加した場合は、次を必ず追加する。
+  - 正式名称
+  - モード条件
+  - 用語対応表の行
+- 既存名称を変更する場合は、Issue/PR本文で旧名称と新名称を併記する。
