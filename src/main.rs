@@ -1,4 +1,5 @@
 mod app;
+mod command;
 mod debug_log;
 mod ui;
 
@@ -6,7 +7,9 @@ use std::io::{self, stdout, Stdout};
 use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -24,6 +27,13 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                     if key.kind != KeyEventKind::Press {
                         continue;
                     }
+                    if app.show_shell_popup {
+                        match key.code {
+                            KeyCode::Esc | KeyCode::Enter => app.close_shell_popup(),
+                            _ => {}
+                        }
+                        continue;
+                    }
                     match app.mode {
                         Mode::Command => match key.code {
                             KeyCode::Esc => app.exit_command_mode(),
@@ -38,9 +48,17 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char(c) => app.command_push_char(c),
                             _ => {}
                         },
+                        Mode::Shell => match key.code {
+                            KeyCode::Esc => app.exit_shell_mode(),
+                            KeyCode::Enter => app.execute_shell_input(),
+                            KeyCode::Backspace => app.shell_pop_char(),
+                            KeyCode::Char(c) => app.shell_push_char(c),
+                            _ => {}
+                        },
                         Mode::Browse => match key.code {
                             KeyCode::Char('q') => return Ok(true),
                             KeyCode::Char(':') => app.enter_command_mode(),
+                            KeyCode::Char('!') => app.enter_shell_mode(),
                             KeyCode::Enter => app.open_selected(),
                             KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),
                             KeyCode::Down | KeyCode::Char('j') => app.move_selection_down(),
@@ -73,7 +91,12 @@ fn main() -> io::Result<()> {
     let mut app = App::new();
     let quit = run_app(&mut terminal, &mut app)?;
     // #region agent log
-    debug_log::log("main.rs:main", "app exit", std::collections::BTreeMap::from([("quit", quit.to_string())]), "H1");
+    debug_log::log(
+        "main.rs:main",
+        "app exit",
+        std::collections::BTreeMap::from([("quit", quit.to_string())]),
+        "H1",
+    );
     // #endregion
 
     stdout().execute(LeaveAlternateScreen)?;

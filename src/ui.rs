@@ -1,10 +1,9 @@
+use ratatui::layout::Rect;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::Line;
-use ratatui::widgets::{
-    Block, Borders, List, ListItem, ListState, Paragraph, Wrap,
-};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::app::{App, Mode};
@@ -41,32 +40,31 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let width = area.width;
 
-    let chunks = if app.mode == Mode::Command {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2),
-                Constraint::Min(3),
-                Constraint::Length(1),
-                Constraint::Length(CMD_CANDIDATE_ROWS),
-            ])
-            .split(area)
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2),
-                Constraint::Min(3),
-                Constraint::Length(2),
-            ])
-            .split(area)
+    let constraints = match app.mode {
+        Mode::Command => vec![
+            Constraint::Length(2),
+            Constraint::Min(3),
+            Constraint::Length(1),
+            Constraint::Length(CMD_CANDIDATE_ROWS),
+        ],
+        Mode::Shell => vec![
+            Constraint::Length(2),
+            Constraint::Min(3),
+            Constraint::Length(1),
+        ],
+        Mode::Browse => vec![
+            Constraint::Length(2),
+            Constraint::Min(3),
+            Constraint::Length(2),
+        ],
     };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(area);
 
     let path_width = width.saturating_sub(4).min(MAX_PATH_WIDTH);
-    let path_display = truncate_to_width(
-        app.current_dir.to_string_lossy().as_ref(),
-        path_width,
-    );
+    let path_display = truncate_to_width(app.current_dir.to_string_lossy().as_ref(), path_width);
     let path_block = Block::default()
         .title(Line::from(" path "))
         .borders(Borders::ALL)
@@ -122,6 +120,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     if app.mode == Mode::Command {
         let cmd_line = format!(":{}", app.command_input);
         let cmd_block = Block::default()
+            .title(Line::from(" command (:): Enter run Esc cancel "))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
             .border_style(Style::default().fg(Color::Yellow));
@@ -141,9 +140,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .enumerate()
             .map(|(i, s)| {
                 let style = if i == app.command_selected {
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Yellow)
+                    Style::default().fg(Color::Black).bg(Color::Yellow)
                 } else {
                     Style::default().fg(Color::Gray)
                 };
@@ -157,23 +154,34 @@ pub fn draw(frame: &mut Frame, app: &App) {
         let mut cand_state = ListState::default();
         cand_state.select(Some(app.command_selected));
         frame.render_stateful_widget(cand_list, chunks[3], &mut cand_state);
+    } else if app.mode == Mode::Shell {
+        let shell_line = format!("!{}", app.shell_input);
+        let shell_block = Block::default()
+            .title(Line::from(" shell (!): Enter run Esc cancel "))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(Color::Yellow));
+        let shell_para = Paragraph::new(shell_line)
+            .block(shell_block)
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(shell_para, chunks[2]);
     } else {
         let status = if !app.status_message.is_empty() {
             app.status_message.clone()
         } else {
             app.selected_entry()
-            .map(|e| {
-                let kind = if e.is_dir { "dir" } else { "file" };
-                let size = e
-                    .size
-                    .map(|s| human_size(s))
-                    .unwrap_or_else(|| "-".to_string());
-                format!(" {}  {}  {}", e.name, kind, size)
-            })
-            .unwrap_or_default()
+                .map(|e| {
+                    let kind = if e.is_dir { "dir" } else { "file" };
+                    let size = e
+                        .size
+                        .map(|s| human_size(s))
+                        .unwrap_or_else(|| "-".to_string());
+                    format!(" {}  {}  {}", e.name, kind, size)
+                })
+                .unwrap_or_default()
         };
         let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
-        let hint = " j/k: move  Enter: open  : command  q: quit ";
+        let hint = " j/k: move  Enter: open  : command  ! shell  q: quit ";
         let block = Block::default()
             .title(Line::from(hint))
             .borders(Borders::ALL)
@@ -183,6 +191,32 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .block(block)
             .style(Style::default().fg(Color::Gray));
         frame.render_widget(para, chunks[2]);
+    }
+
+    if app.show_shell_popup {
+        if let Some(result) = &app.shell_last_output {
+            let exit_text = result
+                .exit_code
+                .map(|code| code.to_string())
+                .unwrap_or_else(|| "signal/error".to_string());
+            let title = format!(" shell output: {} (exit {}) ", app.shell_input, exit_text);
+            let output = format!(
+                "[shell]\n{}\n\n[stdout]\n{}\n\n[stderr]\n{}",
+                result.ran_shell, result.stdout, result.stderr
+            );
+            let popup_area = centered_rect(90, 80, area);
+            frame.render_widget(Clear, popup_area);
+            let para = Paragraph::new(output)
+                .block(
+                    Block::default()
+                        .title(Line::from(title))
+                        .borders(Borders::ALL)
+                        .border_set(symbols::border::ROUNDED)
+                        .border_style(Style::default().fg(Color::Yellow)),
+                )
+                .wrap(Wrap { trim: false });
+            frame.render_widget(para, popup_area);
+        }
     }
 }
 
@@ -199,4 +233,24 @@ fn human_size(n: u64) -> String {
     } else {
         format!("{}B", n)
     }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }
