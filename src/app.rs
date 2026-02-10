@@ -277,6 +277,7 @@ impl App {
             Some(CommandId::Quit) => return command::quit::run(self),
             Some(CommandId::Cd) => return command::cd::run(self),
             Some(CommandId::Open) => return command::open::run(self),
+            Some(CommandId::Editor) => return command::editor::run(self),
             Some(CommandId::Mkdir) => return command::mkdir::run(self),
             Some(CommandId::Delete) => return command::delete::run(self),
             Some(CommandId::Rename) => return command::rename::run(self),

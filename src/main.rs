@@ -75,6 +75,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char(':') => app.enter_command_mode(),
                             KeyCode::Char('!') => app.enter_shell_mode(),
                             KeyCode::Char('/') => app.enter_filter_mode(),
+                            KeyCode::Char('e') => {
+                                command::editor::run(app);
+                            }
                             KeyCode::Delete | KeyCode::Backspace => app.move_to_parent_directory(),
                             KeyCode::Enter => app.open_selected(),
                             KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),

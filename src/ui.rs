@@ -220,7 +220,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 .unwrap_or_default()
         };
         let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
-        let hint = " Move : j/k | Command : ! | Filter : / | Shell : ':' | Quit : q ";
+        let hint = " Move: j/k | Command: : | Filter: / | Shell: ! | Editor: e | Quit: q ";
         let block = Block::default()
             .title(Line::from(hint))
             .borders(Borders::ALL)

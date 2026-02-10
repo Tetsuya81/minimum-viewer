@@ -3,6 +3,7 @@ pub enum CommandId {
     Quit,
     Cd,
     Open,
+    Editor,
     Mkdir,
     Delete,
     Rename,
