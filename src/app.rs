@@ -155,7 +155,12 @@ impl App {
             }
             return;
         }
-        if self.selected_index > 0 {
+        if self.entries.is_empty() {
+            return;
+        }
+        if self.selected_index == 0 {
+            self.selected_index = self.entries.len() - 1;
+        } else {
             self.selected_index -= 1;
         }
     }
@@ -167,8 +172,13 @@ impl App {
             }
             return;
         }
+        if self.entries.is_empty() {
+            return;
+        }
         if self.selected_index + 1 < self.entries.len() {
             self.selected_index += 1;
+        } else {
+            self.selected_index = 0;
         }
     }
 
@@ -527,6 +537,67 @@ mod tests {
 
         assert_eq!(app.entries.len(), 2);
         assert_eq!(app.selected_index, 1);
+    }
+
+    #[test]
+    fn browse_wraps_to_bottom_when_moving_up_from_top() {
+        let mut app = test_app();
+        app.entries = vec![mk_entry("..", true), mk_entry("src", true), mk_entry("README.md", false)];
+        app.selected_index = 0;
+
+        app.move_selection_up();
+
+        assert_eq!(app.selected_index, 2);
+    }
+
+    #[test]
+    fn browse_wraps_to_top_when_moving_down_from_bottom() {
+        let mut app = test_app();
+        app.entries = vec![mk_entry("..", true), mk_entry("src", true), mk_entry("README.md", false)];
+        app.selected_index = 2;
+
+        app.move_selection_down();
+
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn selection_move_noop_when_entries_empty() {
+        let mut app = test_app();
+        app.selected_index = 0;
+
+        app.move_selection_up();
+        app.move_selection_down();
+
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn selection_stays_on_single_entry_when_wrapping() {
+        let mut app = test_app();
+        app.entries = vec![mk_entry("..", true)];
+        app.selected_index = 0;
+
+        app.move_selection_up();
+        assert_eq!(app.selected_index, 0);
+
+        app.move_selection_down();
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn command_mode_selection_still_clamps() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_candidates = vec!["cd".to_string(), "quit".to_string(), "help".to_string()];
+        app.command_selected = 0;
+
+        app.move_selection_up();
+        assert_eq!(app.command_selected, 0);
+
+        app.command_selected = 2;
+        app.move_selection_down();
+        assert_eq!(app.command_selected, 2);
     }
 
     #[test]
