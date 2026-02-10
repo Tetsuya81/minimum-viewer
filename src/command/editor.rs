@@ -34,6 +34,7 @@ pub fn run(app: &mut App) -> bool {
             app.status_message = format!("editor failed: {}", err);
         }
     }
+    app.request_full_redraw();
 
     false
 }
@@ -99,6 +100,7 @@ mod tests {
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
+            needs_full_redraw: false,
             status_message: String::new(),
         }
     }

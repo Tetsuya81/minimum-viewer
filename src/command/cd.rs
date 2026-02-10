@@ -59,6 +59,7 @@ mod tests {
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
+            needs_full_redraw: false,
             status_message: String::new(),
         };
 

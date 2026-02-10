@@ -19,6 +19,10 @@ use ui::draw;
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<bool> {
     loop {
+        if app.consume_full_redraw_request() {
+            terminal.autoresize()?;
+            terminal.clear()?;
+        }
         terminal.draw(|f| draw(f, app))?;
 
         if event::poll(Duration::from_millis(100))? {
