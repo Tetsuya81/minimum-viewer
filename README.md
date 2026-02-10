@@ -12,6 +12,16 @@ cargo build
 cargo run
 ```
 
+## テスト / ビルド実行ルール
+
+このリポジトリでは、環境差分を避けるため Nix 経由で実行します。
+
+```bash
+make test   # nix develop -c cargo test
+make build  # nix develop -c cargo build
+make run    # nix develop -c cargo run
+```
+
 ## 操作
 
 - **j / k** (または ↑↓): 選択移動

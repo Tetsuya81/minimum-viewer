@@ -291,12 +291,12 @@ fn format_status_bar(entry: &crate::app::DirEntry, content_width: u16, expanded:
     let group = entry.group.clone().unwrap_or_else(|| "-".to_string());
 
     if !expanded {
-        return format_status_rows(&[("Size", size), ("Modified", modified)], content_width);
+        return format_status_rows(&[("Modified", modified), ("Size", size)], content_width);
     }
     format_status_rows(
         &[
-            ("Size", size),
             ("Modified", modified),
+            ("Size", size),
             ("Perm", perm),
             ("Owner", owner),
             ("Group", group),
@@ -483,8 +483,9 @@ mod tests {
         };
 
         let status = format_status_bar(&entry, 80, false);
-        assert!(status.contains("Size: 1.2K"));
-        assert!(status.contains("Modified: "));
+        let modified_pos = status.find("Modified: ").expect("Modified must exist");
+        let size_pos = status.find("Size: 1.2K").expect("Size must exist");
+        assert!(modified_pos < size_pos);
         assert!(status.contains(" +"));
         assert!(!status.contains("…"));
         assert!(!status.contains("Perm:"));
@@ -507,8 +508,15 @@ mod tests {
 
         let status = format_status_bar(&entry, 80, true);
 
-        assert!(status.contains("Size: 1.2K"));
-        assert!(status.contains("Modified: "));
+        let modified_pos = status.find("Modified: ").expect("Modified must exist");
+        let size_pos = status.find("Size: 1.2K").expect("Size must exist");
+        let perm_pos = status.find("Perm: rw-r--r--").expect("Perm must exist");
+        let owner_pos = status.find("Owner: alice").expect("Owner must exist");
+        let group_pos = status.find("Group: staff").expect("Group must exist");
+        assert!(modified_pos < size_pos);
+        assert!(size_pos < perm_pos);
+        assert!(perm_pos < owner_pos);
+        assert!(owner_pos < group_pos);
         assert!(status.contains("Perm: rw-r--r--"));
         assert!(status.contains("Owner: alice"));
         assert!(status.contains("Group: staff"));
