@@ -101,6 +101,7 @@ mod tests {
             shell_last_output: None,
             show_shell_popup: false,
             needs_full_redraw: false,
+            status_bar_expanded: false,
             status_message: String::new(),
         }
     }

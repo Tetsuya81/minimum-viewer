@@ -82,6 +82,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char('e') => {
                                 command::editor::run(app);
                             }
+                            KeyCode::Char('m') => app.toggle_status_bar_expanded(),
                             KeyCode::Delete | KeyCode::Backspace => app.move_to_parent_directory(),
                             KeyCode::Enter => app.open_selected(),
                             KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),

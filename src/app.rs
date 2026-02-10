@@ -47,6 +47,7 @@ pub struct App {
     pub shell_last_output: Option<ShellResult>,
     pub show_shell_popup: bool,
     pub needs_full_redraw: bool,
+    pub status_bar_expanded: bool,
     pub status_message: String,
 }
 
@@ -74,6 +75,7 @@ impl App {
             shell_last_output: None,
             show_shell_popup: false,
             needs_full_redraw: false,
+            status_bar_expanded: false,
             status_message: String::new(),
         };
         app.reload_entries();
@@ -380,6 +382,10 @@ impl App {
         requested
     }
 
+    pub fn toggle_status_bar_expanded(&mut self) {
+        self.status_bar_expanded = !self.status_bar_expanded;
+    }
+
     pub fn open_selected(&mut self) {
         if self.mode == Mode::Command {
             if self.execute_selected_command() {
@@ -596,6 +602,7 @@ mod tests {
             shell_last_output: None,
             show_shell_popup: false,
             needs_full_redraw: false,
+            status_bar_expanded: false,
             status_message: String::new(),
         }
     }
@@ -780,6 +787,17 @@ mod tests {
         assert_eq!(app.mode, Mode::Browse);
         assert!(app.filter_input.is_empty());
         assert_eq!(app.status_message, "cd: parent directory not found");
+    }
+
+    #[test]
+    fn toggle_status_bar_expanded_switches_state() {
+        let mut app = test_app();
+
+        assert!(!app.status_bar_expanded);
+        app.toggle_status_bar_expanded();
+        assert!(app.status_bar_expanded);
+        app.toggle_status_bar_expanded();
+        assert!(!app.status_bar_expanded);
     }
 
     #[test]

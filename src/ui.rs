@@ -13,6 +13,8 @@ const MAX_PATH_WIDTH: u16 = 80;
 const CMD_CANDIDATE_ROWS: u16 = 6;
 const INPUT_ROWS: u16 = 3;
 const SHELL_PANEL_ROWS: u16 = 6;
+const STATUS_BAR_COLLAPSED_ROWS: u16 = 3;
+const STATUS_BAR_EXPANDED_ROWS: u16 = 6;
 
 fn truncate_to_width(s: &str, width: u16) -> String {
     let w = width as usize;
@@ -64,7 +66,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Browse => vec![
             Constraint::Length(3),
             Constraint::Min(3),
-            Constraint::Length(4),
+            Constraint::Length(if app.status_bar_expanded {
+                STATUS_BAR_EXPANDED_ROWS
+            } else {
+                STATUS_BAR_COLLAPSED_ROWS
+            }),
         ],
     };
     let chunks = Layout::default()
@@ -210,7 +216,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             app.status_message.clone()
         } else {
             app.selected_entry()
-                .map(|e| format_metadata_status(e, width.saturating_sub(4)))
+                .map(|e| format_status_bar(e, width.saturating_sub(4), app.status_bar_expanded))
                 .unwrap_or_default()
         };
         let block = Block::default()
@@ -267,8 +273,7 @@ fn human_size(n: u64) -> String {
     }
 }
 
-fn format_metadata_status(entry: &crate::app::DirEntry, content_width: u16) -> String {
-    let kind = if entry.is_dir { "dir" } else { "file" };
+fn format_status_bar(entry: &crate::app::DirEntry, content_width: u16, expanded: bool) -> String {
     let size = entry
         .size
         .map(human_size)
@@ -281,16 +286,65 @@ fn format_metadata_status(entry: &crate::app::DirEntry, content_width: u16) -> S
     let owner = entry.owner.clone().unwrap_or_else(|| "-".to_string());
     let group = entry.group.clone().unwrap_or_else(|| "-".to_string());
 
+    if !expanded {
+        return format_status_row(
+            &[("Size", size), ("Modified", modified)],
+            content_width,
+        );
+    }
+
+    if content_width >= 90 {
+        return format_status_row(
+            &[
+                ("Size", size),
+                ("Modified", modified),
+                ("Perm", perm),
+                ("Owner", owner),
+                ("Group", group),
+            ],
+            content_width,
+        );
+    }
+
+    if content_width >= 50 {
+        return [
+            format_status_row(&[("Size", size), ("Modified", modified)], content_width),
+            format_status_row(
+                &[("Perm", perm), ("Owner", owner), ("Group", group)],
+                content_width,
+            ),
+        ]
+        .join("\n");
+    }
+
     [
-        format_status_line("Name", &entry.name, content_width),
-        format_status_line("Type", kind, content_width),
         format_status_line("Size", &size, content_width),
-        format_status_line("Date modified", &modified, content_width),
+        format_status_line("Modified", &modified, content_width),
         format_status_line("Perm", &perm, content_width),
         format_status_line("Owner", &owner, content_width),
         format_status_line("Group", &group, content_width),
     ]
     .join("\n")
+}
+
+fn format_status_row(items: &[(&str, String)], width: u16) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let sep = " | ";
+    let sep_chars = sep.chars().count();
+    let separator_width = sep_chars.saturating_mul(items.len().saturating_sub(1));
+    let available = (width as usize).saturating_sub(separator_width);
+    let each = if items.is_empty() {
+        0
+    } else {
+        available / items.len()
+    } as u16;
+    items
+        .iter()
+        .map(|(label, value)| format_status_line(label, value, each))
+        .collect::<Vec<_>>()
+        .join(sep)
 }
 
 fn format_status_line(label: &str, value: &str, width: u16) -> String {
@@ -372,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn metadata_status_contains_expected_fields() {
+    fn status_bar_collapsed_contains_only_size_and_modified() {
         let entry = crate::app::DirEntry {
             name: "example.txt".to_string(),
             path: PathBuf::from("example.txt"),
@@ -384,14 +438,51 @@ mod tests {
             group: Some("staff".to_string()),
         };
 
-        let status = format_metadata_status(&entry, 80);
-
-        assert!(status.contains("Name: example.txt"));
-        assert!(status.contains("Type: file"));
+        let status = format_status_bar(&entry, 80, false);
         assert!(status.contains("Size: 1.2K"));
-        assert!(status.contains("Date modified: 1970-01-01 00:00"));
+        assert!(status.contains("Modified: 1970-01-01 00:00"));
+        assert!(!status.contains("Perm:"));
+        assert!(!status.contains("Owner:"));
+        assert!(!status.contains("Group:"));
+    }
+
+    #[test]
+    fn status_bar_expanded_contains_permission_owner_group() {
+        let entry = crate::app::DirEntry {
+            name: "example.txt".to_string(),
+            path: PathBuf::from("example.txt"),
+            is_dir: false,
+            size: Some(1234),
+            modified: Some(UNIX_EPOCH),
+            permissions: Some("rw-r--r--".to_string()),
+            owner: Some("alice".to_string()),
+            group: Some("staff".to_string()),
+        };
+
+        let status = format_status_bar(&entry, 80, true);
+
+        assert!(status.contains("Size: 1.2K"));
+        assert!(status.contains("Modified: 1970-01-01 00:00"));
         assert!(status.contains("Perm: rw-r--r--"));
         assert!(status.contains("Owner: alice"));
         assert!(status.contains("Group: staff"));
+    }
+
+    #[test]
+    fn status_bar_expanded_small_width_breaks_into_multiple_lines() {
+        let entry = crate::app::DirEntry {
+            name: "example.txt".to_string(),
+            path: PathBuf::from("example.txt"),
+            is_dir: false,
+            size: Some(1234),
+            modified: Some(UNIX_EPOCH),
+            permissions: Some("rw-r--r--".to_string()),
+            owner: Some("alice".to_string()),
+            group: Some("staff".to_string()),
+        };
+
+        let status = format_status_bar(&entry, 30, true);
+        let lines: Vec<&str> = status.lines().collect();
+        assert_eq!(lines.len(), 5);
     }
 }

@@ -47,7 +47,10 @@
 - `Status Bar`
   - 位置: `Bottom`
   - 画面タイトル: `status`
-  - 内容: ステータスメッセージまたは選択中エントリのメタデータ（`Name`, `Type`, `Size`, `Date modified`, `Permission`, `Owner`, `Group`）
+  - 内容:
+    - 折りたたみ（初期）: ステータスメッセージまたは `Size`, `Modified` の1行表示
+    - 展開（`m`）: `Size`, `Modified`, `Perm`, `Owner`, `Group` を表示
+    - 狭幅時: 見切れ防止のため1項目1行へ自動切替
 
 ### Filter
 - `Filter Input Bar`
