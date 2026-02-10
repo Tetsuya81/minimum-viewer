@@ -35,6 +35,7 @@ pub struct App {
     pub shell_input: String,
     pub shell_last_output: Option<ShellResult>,
     pub show_shell_popup: bool,
+    pub needs_full_redraw: bool,
     pub status_message: String,
 }
 
@@ -61,6 +62,7 @@ impl App {
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
+            needs_full_redraw: false,
             status_message: String::new(),
         };
         app.reload_entries();
@@ -277,6 +279,7 @@ impl App {
             Some(CommandId::Quit) => return command::quit::run(self),
             Some(CommandId::Cd) => return command::cd::run(self),
             Some(CommandId::Open) => return command::open::run(self),
+            Some(CommandId::Editor) => return command::editor::run(self),
             Some(CommandId::Mkdir) => return command::mkdir::run(self),
             Some(CommandId::Delete) => return command::delete::run(self),
             Some(CommandId::Rename) => return command::rename::run(self),
@@ -344,6 +347,16 @@ impl App {
         self.show_shell_popup = false;
         self.shell_last_output = None;
         self.shell_input.clear();
+    }
+
+    pub fn request_full_redraw(&mut self) {
+        self.needs_full_redraw = true;
+    }
+
+    pub fn consume_full_redraw_request(&mut self) -> bool {
+        let requested = self.needs_full_redraw;
+        self.needs_full_redraw = false;
+        requested
     }
 
     pub fn open_selected(&mut self) {
@@ -451,6 +464,7 @@ mod tests {
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
+            needs_full_redraw: false,
             status_message: String::new(),
         }
     }

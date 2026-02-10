@@ -1,5 +1,6 @@
 pub mod cd;
 pub mod delete;
+pub mod editor;
 pub mod help;
 pub mod mkdir;
 pub mod open;
@@ -24,6 +25,11 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         id: CommandId::Open,
         name: "open",
         aliases: &[],
+    },
+    CommandSpec {
+        id: CommandId::Editor,
+        name: "editor",
+        aliases: &["e"],
     },
     CommandSpec {
         id: CommandId::Mkdir,
@@ -95,7 +101,9 @@ mod tests {
         let list = filter_candidates("");
         assert_eq!(
             list,
-            vec!["quit", "cd", "open", "mkdir", "delete", "rename", "help"]
+            vec![
+                "quit", "cd", "open", "editor", "mkdir", "delete", "rename", "help"
+            ]
         );
     }
 
@@ -114,6 +122,14 @@ mod tests {
         assert_eq!(
             resolve_command("?", 0, &["quit".to_string()]),
             Some(CommandId::Help)
+        );
+        assert_eq!(
+            resolve_command("editor", 0, &["quit".to_string()]),
+            Some(CommandId::Editor)
+        );
+        assert_eq!(
+            resolve_command("e", 0, &["quit".to_string()]),
+            Some(CommandId::Editor)
         );
     }
 
