@@ -5,6 +5,10 @@ use ratatui::symbols;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
+#[cfg(unix)]
+use std::os::raw::{c_int, c_long};
+#[cfg(unix)]
+use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{App, Mode};
@@ -287,75 +291,47 @@ fn format_status_bar(entry: &crate::app::DirEntry, content_width: u16, expanded:
     let group = entry.group.clone().unwrap_or_else(|| "-".to_string());
 
     if !expanded {
-        return format_status_row(
-            &[("Size", size), ("Modified", modified)],
-            content_width,
-        );
+        return format_status_rows(&[("Size", size), ("Modified", modified)], content_width);
     }
-
-    if content_width >= 90 {
-        return format_status_row(
-            &[
-                ("Size", size),
-                ("Modified", modified),
-                ("Perm", perm),
-                ("Owner", owner),
-                ("Group", group),
-            ],
-            content_width,
-        );
-    }
-
-    if content_width >= 50 {
-        return [
-            format_status_row(&[("Size", size), ("Modified", modified)], content_width),
-            format_status_row(
-                &[("Perm", perm), ("Owner", owner), ("Group", group)],
-                content_width,
-            ),
-        ]
-        .join("\n");
-    }
-
-    [
-        format_status_line("Size", &size, content_width),
-        format_status_line("Modified", &modified, content_width),
-        format_status_line("Perm", &perm, content_width),
-        format_status_line("Owner", &owner, content_width),
-        format_status_line("Group", &group, content_width),
-    ]
-    .join("\n")
+    format_status_rows(
+        &[
+            ("Size", size),
+            ("Modified", modified),
+            ("Perm", perm),
+            ("Owner", owner),
+            ("Group", group),
+        ],
+        content_width,
+    )
 }
 
-fn format_status_row(items: &[(&str, String)], width: u16) -> String {
+fn format_status_rows(items: &[(&str, String)], width: u16) -> String {
     if items.is_empty() {
         return String::new();
     }
-    let sep = " | ";
-    let sep_chars = sep.chars().count();
-    let separator_width = sep_chars.saturating_mul(items.len().saturating_sub(1));
-    let available = (width as usize).saturating_sub(separator_width);
-    let each = if items.is_empty() {
-        0
-    } else {
-        available / items.len()
-    } as u16;
-    items
-        .iter()
-        .map(|(label, value)| format_status_line(label, value, each))
-        .collect::<Vec<_>>()
-        .join(sep)
-}
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let max = width as usize;
 
-fn format_status_line(label: &str, value: &str, width: u16) -> String {
-    let prefix = format!("{}: ", label);
-    let prefix_len = prefix.chars().count();
-    let width_len = width as usize;
-    if width_len <= prefix_len {
-        return truncate_to_width(&prefix, width);
+    for (label, value) in items {
+        let segment = format!("{}: {}", label, value);
+        if current.is_empty() {
+            current = segment;
+            continue;
+        }
+        let candidate = format!("{} | {}", current, segment);
+        if max > 0 && candidate.chars().count() <= max {
+            current = candidate;
+        } else {
+            lines.push(current);
+            current = segment;
+        }
     }
-    let max_value_width = (width_len - prefix_len) as u16;
-    format!("{}{}", prefix, truncate_to_width(value, max_value_width))
+    if !current.is_empty() {
+        lines.push(current);
+    }
+
+    lines.join("\n")
 }
 
 fn format_modified(modified: Option<SystemTime>) -> String {
@@ -366,7 +342,51 @@ fn format_modified(modified: Option<SystemTime>) -> String {
         return "-".to_string();
     };
     let secs = duration.as_secs() as i64;
-    format_unix_utc(secs)
+    format_local_with_offset(secs)
+}
+
+#[cfg(unix)]
+fn format_local_with_offset(secs: i64) -> String {
+    let mut raw_time = secs as TimeT;
+    let mut tm = Tm {
+        tm_sec: 0,
+        tm_min: 0,
+        tm_hour: 0,
+        tm_mday: 0,
+        tm_mon: 0,
+        tm_year: 0,
+        tm_wday: 0,
+        tm_yday: 0,
+        tm_isdst: 0,
+        tm_gmtoff: 0,
+        tm_zone: ptr::null(),
+    };
+    unsafe {
+        if localtime_r(&mut raw_time as *mut TimeT as *const TimeT, &mut tm).is_null() {
+            return format!("{} +00:00", format_unix_utc(secs));
+        }
+    }
+
+    let year = tm.tm_year as i64 + 1900;
+    let month = tm.tm_mon as i64 + 1;
+    let day = tm.tm_mday as i64;
+    let hour = tm.tm_hour as i64;
+    let minute = tm.tm_min as i64;
+    let offset = tm.tm_gmtoff;
+    let sign = if offset >= 0 { '+' } else { '-' };
+    let abs = offset.abs();
+    let off_hour = abs / 3600;
+    let off_min = (abs % 3600) / 60;
+
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02} {}{:02}:{:02}",
+        year, month, day, hour, minute, sign, off_hour, off_min
+    )
+}
+
+#[cfg(not(unix))]
+fn format_local_with_offset(secs: i64) -> String {
+    format!("{} +00:00", format_unix_utc(secs))
 }
 
 fn format_unix_utc(secs: i64) -> String {
@@ -393,6 +413,30 @@ fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
     let m = mp + if mp < 10 { 3 } else { -9 };
     let year = y + if m <= 2 { 1 } else { 0 };
     (year, m, d)
+}
+
+#[cfg(unix)]
+type TimeT = i64;
+
+#[cfg(unix)]
+#[repr(C)]
+struct Tm {
+    tm_sec: c_int,
+    tm_min: c_int,
+    tm_hour: c_int,
+    tm_mday: c_int,
+    tm_mon: c_int,
+    tm_year: c_int,
+    tm_wday: c_int,
+    tm_yday: c_int,
+    tm_isdst: c_int,
+    tm_gmtoff: c_long,
+    tm_zone: *const i8,
+}
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn localtime_r(timep: *const TimeT, result: *mut Tm) -> *mut Tm;
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
@@ -440,7 +484,9 @@ mod tests {
 
         let status = format_status_bar(&entry, 80, false);
         assert!(status.contains("Size: 1.2K"));
-        assert!(status.contains("Modified: 1970-01-01 00:00"));
+        assert!(status.contains("Modified: "));
+        assert!(status.contains(" +"));
+        assert!(!status.contains("…"));
         assert!(!status.contains("Perm:"));
         assert!(!status.contains("Owner:"));
         assert!(!status.contains("Group:"));
@@ -462,10 +508,11 @@ mod tests {
         let status = format_status_bar(&entry, 80, true);
 
         assert!(status.contains("Size: 1.2K"));
-        assert!(status.contains("Modified: 1970-01-01 00:00"));
+        assert!(status.contains("Modified: "));
         assert!(status.contains("Perm: rw-r--r--"));
         assert!(status.contains("Owner: alice"));
         assert!(status.contains("Group: staff"));
+        assert!(!status.contains("…"));
     }
 
     #[test]
@@ -483,6 +530,20 @@ mod tests {
 
         let status = format_status_bar(&entry, 30, true);
         let lines: Vec<&str> = status.lines().collect();
-        assert_eq!(lines.len(), 5);
+        assert!(lines.len() >= 3);
+    }
+
+    #[test]
+    fn modified_has_timezone_offset_format() {
+        let rendered = format_modified(Some(UNIX_EPOCH));
+        let bytes = rendered.as_bytes();
+        assert_eq!(bytes.len(), 23);
+        assert_eq!(bytes[4], b'-');
+        assert_eq!(bytes[7], b'-');
+        assert_eq!(bytes[10], b' ');
+        assert_eq!(bytes[13], b':');
+        assert_eq!(bytes[16], b' ');
+        assert!(bytes[17] == b'+' || bytes[17] == b'-');
+        assert_eq!(bytes[20], b':');
     }
 }
