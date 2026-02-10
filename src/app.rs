@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 #[cfg(unix)]
 use std::ffi::CStr;
 use std::fs;
@@ -29,6 +29,8 @@ pub struct DirEntry {
     pub size: Option<u64>,
     pub modified: Option<SystemTime>,
     pub permissions: Option<String>,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
     pub owner: Option<String>,
     pub group: Option<String>,
 }
@@ -49,6 +51,8 @@ pub struct App {
     pub needs_full_redraw: bool,
     pub status_bar_expanded: bool,
     pub status_message: String,
+    pub user_name_cache: HashMap<u32, String>,
+    pub group_name_cache: HashMap<u32, String>,
 }
 
 pub struct ShellResult {
@@ -77,6 +81,8 @@ impl App {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
+            user_name_cache: HashMap::new(),
+            group_name_cache: HashMap::new(),
         };
         app.reload_entries();
         app.sync_cwd_env();
@@ -159,6 +165,48 @@ impl App {
 
     pub fn selected_entry(&self) -> Option<&DirEntry> {
         self.entries.get(self.selected_index)
+    }
+
+    pub fn ensure_selected_owner_group_resolved(&mut self) {
+        let idx = self.selected_index;
+        let Some(selected) = self.entries.get(idx) else {
+            return;
+        };
+        if selected.name == ".." {
+            return;
+        }
+
+        #[cfg(unix)]
+        {
+            let (uid, gid, owner_missing, group_missing) = {
+                let entry = &self.entries[idx];
+                (entry.uid, entry.gid, entry.owner.is_none(), entry.group.is_none())
+            };
+
+            let owner = if owner_missing {
+                uid.map(|u| self.resolve_user_name_cached(u))
+            } else {
+                None
+            };
+            let group = if group_missing {
+                gid.map(|g| self.resolve_group_name_cached(g))
+            } else {
+                None
+            };
+
+            if owner.is_none() && group.is_none() {
+                return;
+            }
+
+            if let Some(entry) = self.entries.get_mut(idx) {
+                if let Some(owner) = owner {
+                    entry.owner = Some(owner);
+                }
+                if let Some(group) = group {
+                    entry.group = Some(group);
+                }
+            }
+        }
     }
 
     pub fn move_selection_up(&mut self) {
@@ -440,12 +488,12 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
             #[cfg(not(unix))]
             let permissions = None;
             #[cfg(unix)]
-            let (owner, group) = meta
+            let (uid, gid) = meta
                 .as_ref()
-                .map(resolve_owner_group)
+                .map(|m| (Some(m.uid()), Some(m.gid())))
                 .unwrap_or((None, None));
             #[cfg(not(unix))]
-            let (owner, group) = (None, None);
+            let (uid, gid) = (None, None);
             DirEntry {
                 name,
                 path,
@@ -453,8 +501,10 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 size,
                 modified,
                 permissions,
-                owner,
-                group,
+                uid,
+                gid,
+                owner: None,
+                group: None,
             }
         })
         .collect();
@@ -477,6 +527,8 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 size: None,
                 modified: None,
                 permissions: None,
+                uid: None,
+                gid: None,
                 owner: None,
                 group: None,
             },
@@ -512,16 +564,6 @@ fn format_permissions(meta: &fs::Metadata) -> String {
 }
 
 #[cfg(unix)]
-fn resolve_owner_group(meta: &fs::Metadata) -> (Option<String>, Option<String>) {
-    let uid = meta.uid() as c_uint;
-    let gid = meta.gid() as c_uint;
-    (
-        lookup_user_name(uid).or_else(|| Some(uid.to_string())),
-        lookup_group_name(gid).or_else(|| Some(gid.to_string())),
-    )
-}
-
-#[cfg(unix)]
 fn lookup_user_name(uid: c_uint) -> Option<String> {
     unsafe {
         let ptr = getpwuid(uid);
@@ -540,6 +582,27 @@ fn lookup_group_name(gid: c_uint) -> Option<String> {
             return None;
         }
         Some(CStr::from_ptr((*ptr).gr_name).to_string_lossy().into_owned())
+    }
+}
+
+#[cfg(unix)]
+impl App {
+    fn resolve_user_name_cached(&mut self, uid: u32) -> String {
+        if let Some(name) = self.user_name_cache.get(&uid) {
+            return name.clone();
+        }
+        let resolved = lookup_user_name(uid as c_uint).unwrap_or_else(|| uid.to_string());
+        self.user_name_cache.insert(uid, resolved.clone());
+        resolved
+    }
+
+    fn resolve_group_name_cached(&mut self, gid: u32) -> String {
+        if let Some(name) = self.group_name_cache.get(&gid) {
+            return name.clone();
+        }
+        let resolved = lookup_group_name(gid as c_uint).unwrap_or_else(|| gid.to_string());
+        self.group_name_cache.insert(gid, resolved.clone());
+        resolved
     }
 }
 
@@ -582,6 +645,8 @@ mod tests {
             size: if is_dir { None } else { Some(1) },
             modified: None,
             permissions: None,
+            uid: None,
+            gid: None,
             owner: None,
             group: None,
         }
@@ -604,6 +669,8 @@ mod tests {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
+            user_name_cache: HashMap::new(),
+            group_name_cache: HashMap::new(),
         }
     }
 
@@ -815,9 +882,147 @@ mod tests {
         assert_eq!(parent.name, "..");
         assert!(parent.modified.is_none());
         assert!(parent.permissions.is_none());
+        assert!(parent.uid.is_none());
+        assert!(parent.gid.is_none());
         assert!(parent.owner.is_none());
         assert!(parent.group.is_none());
 
         let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn read_sorted_entries_does_not_resolve_owner_group_eagerly() {
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-owner-group-{}", std::process::id()));
+        let file = base.join("sample.txt");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        std::fs::write(&file, "x").expect("write sample file");
+
+        let entries = read_sorted_entries(&base).expect("read entries");
+        let sample = entries
+            .iter()
+            .find(|entry| entry.name == "sample.txt")
+            .expect("sample entry must exist");
+        assert!(sample.owner.is_none());
+        assert!(sample.group.is_none());
+
+        #[cfg(unix)]
+        {
+            assert!(sample.uid.is_some());
+            assert!(sample.gid.is_some());
+        }
+        #[cfg(not(unix))]
+        {
+            assert!(sample.uid.is_none());
+            assert!(sample.gid.is_none());
+        }
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn ensure_selected_owner_group_resolved_uses_cached_names() {
+        let mut app = test_app();
+        app.entries = vec![DirEntry {
+            name: "sample.txt".to_string(),
+            path: PathBuf::from("sample.txt"),
+            is_dir: false,
+            size: Some(1),
+            modified: None,
+            permissions: Some("rw-r--r--".to_string()),
+            uid: Some(42),
+            gid: Some(84),
+            owner: None,
+            group: None,
+        }];
+        app.user_name_cache.insert(42, "cached-user".to_string());
+        app.group_name_cache.insert(84, "cached-group".to_string());
+
+        app.ensure_selected_owner_group_resolved();
+
+        let entry = app.selected_entry().expect("selection must exist");
+        assert_eq!(entry.owner.as_deref(), Some("cached-user"));
+        assert_eq!(entry.group.as_deref(), Some("cached-group"));
+    }
+
+    #[test]
+    fn ensure_selected_owner_group_resolved_is_noop_for_parent_entry() {
+        let mut app = test_app();
+        app.entries = vec![DirEntry {
+            name: "..".to_string(),
+            path: PathBuf::from(".."),
+            is_dir: true,
+            size: None,
+            modified: None,
+            permissions: None,
+            uid: Some(1),
+            gid: Some(1),
+            owner: None,
+            group: None,
+        }];
+        app.user_name_cache.insert(1, "root".to_string());
+        app.group_name_cache.insert(1, "wheel".to_string());
+
+        app.ensure_selected_owner_group_resolved();
+
+        let entry = app.selected_entry().expect("selection must exist");
+        assert!(entry.owner.is_none());
+        assert!(entry.group.is_none());
+    }
+
+    #[test]
+    fn ensure_selected_owner_group_resolved_is_noop_when_ids_missing() {
+        let mut app = test_app();
+        app.entries = vec![mk_entry("sample.txt", false)];
+
+        app.ensure_selected_owner_group_resolved();
+
+        let entry = app.selected_entry().expect("selection must exist");
+        assert!(entry.owner.is_none());
+        assert!(entry.group.is_none());
+    }
+
+    #[test]
+    fn ensure_selected_owner_group_resolved_uses_cache_for_multiple_entries() {
+        let mut app = test_app();
+        app.entries = vec![
+            DirEntry {
+                name: "a.txt".to_string(),
+                path: PathBuf::from("a.txt"),
+                is_dir: false,
+                size: Some(1),
+                modified: None,
+                permissions: Some("rw-r--r--".to_string()),
+                uid: Some(100),
+                gid: Some(200),
+                owner: None,
+                group: None,
+            },
+            DirEntry {
+                name: "b.txt".to_string(),
+                path: PathBuf::from("b.txt"),
+                is_dir: false,
+                size: Some(1),
+                modified: None,
+                permissions: Some("rw-r--r--".to_string()),
+                uid: Some(100),
+                gid: Some(200),
+                owner: None,
+                group: None,
+            },
+        ];
+        app.user_name_cache.insert(100, "same-user".to_string());
+        app.group_name_cache.insert(200, "same-group".to_string());
+
+        app.selected_index = 0;
+        app.ensure_selected_owner_group_resolved();
+        app.selected_index = 1;
+        app.ensure_selected_owner_group_resolved();
+
+        assert_eq!(app.entries[0].owner.as_deref(), Some("same-user"));
+        assert_eq!(app.entries[0].group.as_deref(), Some("same-group"));
+        assert_eq!(app.entries[1].owner.as_deref(), Some("same-user"));
+        assert_eq!(app.entries[1].group.as_deref(), Some("same-group"));
     }
 }

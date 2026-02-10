@@ -23,6 +23,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
             terminal.autoresize()?;
             terminal.clear()?;
         }
+        app.ensure_selected_owner_group_resolved();
         terminal.draw(|f| draw(f, app))?;
 
         if event::poll(Duration::from_millis(100))? {

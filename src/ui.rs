@@ -478,6 +478,8 @@ mod tests {
             size: Some(1234),
             modified: Some(UNIX_EPOCH),
             permissions: Some("rw-r--r--".to_string()),
+            uid: None,
+            gid: None,
             owner: Some("alice".to_string()),
             group: Some("staff".to_string()),
         };
@@ -502,6 +504,8 @@ mod tests {
             size: Some(1234),
             modified: Some(UNIX_EPOCH),
             permissions: Some("rw-r--r--".to_string()),
+            uid: None,
+            gid: None,
             owner: Some("alice".to_string()),
             group: Some("staff".to_string()),
         };
@@ -532,6 +536,8 @@ mod tests {
             size: Some(1234),
             modified: Some(UNIX_EPOCH),
             permissions: Some("rw-r--r--".to_string()),
+            uid: None,
+            gid: None,
             owner: Some("alice".to_string()),
             group: Some("staff".to_string()),
         };

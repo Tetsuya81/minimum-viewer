@@ -103,6 +103,8 @@ mod tests {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
+            user_name_cache: std::collections::HashMap::new(),
+            group_name_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -129,6 +131,8 @@ mod tests {
             size: Some(1),
             modified: None,
             permissions: None,
+            uid: None,
+            gid: None,
             owner: None,
             group: None,
         }];
