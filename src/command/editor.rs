@@ -126,6 +126,10 @@ mod tests {
             path: PathBuf::from("file.txt"),
             is_dir: false,
             size: Some(1),
+            modified: None,
+            permissions: None,
+            owner: None,
+            group: None,
         }];
         let should_quit = run(&mut app);
 

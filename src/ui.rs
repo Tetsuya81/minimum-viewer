@@ -5,6 +5,7 @@ use ratatui::symbols;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{App, Mode};
 
@@ -63,7 +64,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Browse => vec![
             Constraint::Length(3),
             Constraint::Min(3),
-            Constraint::Length(2),
+            Constraint::Length(4),
         ],
     };
     let chunks = Layout::default()
@@ -209,26 +210,18 @@ pub fn draw(frame: &mut Frame, app: &App) {
             app.status_message.clone()
         } else {
             app.selected_entry()
-                .map(|e| {
-                    let kind = if e.is_dir { "dir" } else { "file" };
-                    let size = e
-                        .size
-                        .map(|s| human_size(s))
-                        .unwrap_or_else(|| "-".to_string());
-                    format!(" {}  {}  {}", e.name, kind, size)
-                })
+                .map(|e| format_metadata_status(e, width.saturating_sub(4)))
                 .unwrap_or_default()
         };
-        let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
-        let hint = " Move: j/k | Command: : | Filter: / | Shell: ! | Editor: e | Quit: q ";
         let block = Block::default()
-            .title(Line::from(hint))
+            .title(Line::from(" status "))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
             .border_style(Style::default().fg(Color::DarkGray));
-        let para = Paragraph::new(status_trunc)
+        let para = Paragraph::new(status)
             .block(block)
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(Color::Gray))
+            .wrap(Wrap { trim: false });
         frame.render_widget(para, chunks[2]);
     }
 
@@ -274,6 +267,80 @@ fn human_size(n: u64) -> String {
     }
 }
 
+fn format_metadata_status(entry: &crate::app::DirEntry, content_width: u16) -> String {
+    let kind = if entry.is_dir { "dir" } else { "file" };
+    let size = entry
+        .size
+        .map(human_size)
+        .unwrap_or_else(|| "-".to_string());
+    let modified = format_modified(entry.modified);
+    let perm = entry
+        .permissions
+        .clone()
+        .unwrap_or_else(|| "-".to_string());
+    let owner = entry.owner.clone().unwrap_or_else(|| "-".to_string());
+    let group = entry.group.clone().unwrap_or_else(|| "-".to_string());
+
+    [
+        format_status_line("Name", &entry.name, content_width),
+        format_status_line("Type", kind, content_width),
+        format_status_line("Size", &size, content_width),
+        format_status_line("Date modified", &modified, content_width),
+        format_status_line("Perm", &perm, content_width),
+        format_status_line("Owner", &owner, content_width),
+        format_status_line("Group", &group, content_width),
+    ]
+    .join("\n")
+}
+
+fn format_status_line(label: &str, value: &str, width: u16) -> String {
+    let prefix = format!("{}: ", label);
+    let prefix_len = prefix.chars().count();
+    let width_len = width as usize;
+    if width_len <= prefix_len {
+        return truncate_to_width(&prefix, width);
+    }
+    let max_value_width = (width_len - prefix_len) as u16;
+    format!("{}{}", prefix, truncate_to_width(value, max_value_width))
+}
+
+fn format_modified(modified: Option<SystemTime>) -> String {
+    let Some(time) = modified else {
+        return "-".to_string();
+    };
+    let Ok(duration) = time.duration_since(UNIX_EPOCH) else {
+        return "-".to_string();
+    };
+    let secs = duration.as_secs() as i64;
+    format_unix_utc(secs)
+}
+
+fn format_unix_utc(secs: i64) -> String {
+    let days = secs.div_euclid(86_400);
+    let day_seconds = secs.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = day_seconds / 3_600;
+    let minute = (day_seconds % 3_600) / 60;
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}",
+        year, month, day, hour, minute
+    )
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if m <= 2 { 1 } else { 0 };
+    (year, m, d)
+}
+
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -292,4 +359,39 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn unix_epoch_formats_as_expected() {
+        assert_eq!(format_unix_utc(0), "1970-01-01 00:00");
+    }
+
+    #[test]
+    fn metadata_status_contains_expected_fields() {
+        let entry = crate::app::DirEntry {
+            name: "example.txt".to_string(),
+            path: PathBuf::from("example.txt"),
+            is_dir: false,
+            size: Some(1234),
+            modified: Some(UNIX_EPOCH),
+            permissions: Some("rw-r--r--".to_string()),
+            owner: Some("alice".to_string()),
+            group: Some("staff".to_string()),
+        };
+
+        let status = format_metadata_status(&entry, 80);
+
+        assert!(status.contains("Name: example.txt"));
+        assert!(status.contains("Type: file"));
+        assert!(status.contains("Size: 1.2K"));
+        assert!(status.contains("Date modified: 1970-01-01 00:00"));
+        assert!(status.contains("Perm: rw-r--r--"));
+        assert!(status.contains("Owner: alice"));
+        assert!(status.contains("Group: staff"));
+    }
 }

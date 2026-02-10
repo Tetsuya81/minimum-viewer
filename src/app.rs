@@ -1,7 +1,14 @@
 use std::collections::BTreeMap;
+#[cfg(unix)]
+use std::ffi::CStr;
 use std::fs;
+#[cfg(unix)]
+use std::os::raw::{c_char, c_uint};
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 
 use crate::command;
 use crate::command::types::CommandId;
@@ -20,6 +27,10 @@ pub struct DirEntry {
     pub path: PathBuf,
     pub is_dir: bool,
     pub size: Option<u64>,
+    pub modified: Option<SystemTime>,
+    pub permissions: Option<String>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 pub struct App {
@@ -414,12 +425,30 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 .to_string();
             let meta = e.metadata().ok();
             let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-            let size = meta.and_then(|m| if m.is_file() { Some(m.len()) } else { None });
+            let size = meta
+                .as_ref()
+                .and_then(|m| if m.is_file() { Some(m.len()) } else { None });
+            let modified = meta.as_ref().and_then(|m| m.modified().ok());
+            #[cfg(unix)]
+            let permissions = meta.as_ref().map(format_permissions);
+            #[cfg(not(unix))]
+            let permissions = None;
+            #[cfg(unix)]
+            let (owner, group) = meta
+                .as_ref()
+                .map(resolve_owner_group)
+                .unwrap_or((None, None));
+            #[cfg(not(unix))]
+            let (owner, group) = (None, None);
             DirEntry {
                 name,
                 path,
                 is_dir,
                 size,
+                modified,
+                permissions,
+                owner,
+                group,
             }
         })
         .collect();
@@ -440,11 +469,99 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 path: parent_path,
                 is_dir: true,
                 size: None,
+                modified: None,
+                permissions: None,
+                owner: None,
+                group: None,
             },
         );
     }
 
     Ok(entries)
+}
+
+#[cfg(unix)]
+fn format_permissions(meta: &fs::Metadata) -> String {
+    let mode = meta.mode();
+    let masks = [
+        (0o400, 'r'),
+        (0o200, 'w'),
+        (0o100, 'x'),
+        (0o040, 'r'),
+        (0o020, 'w'),
+        (0o010, 'x'),
+        (0o004, 'r'),
+        (0o002, 'w'),
+        (0o001, 'x'),
+    ];
+    let mut out = String::with_capacity(9);
+    for (mask, ch) in masks {
+        if mode & mask != 0 {
+            out.push(ch);
+        } else {
+            out.push('-');
+        }
+    }
+    out
+}
+
+#[cfg(unix)]
+fn resolve_owner_group(meta: &fs::Metadata) -> (Option<String>, Option<String>) {
+    let uid = meta.uid() as c_uint;
+    let gid = meta.gid() as c_uint;
+    (
+        lookup_user_name(uid).or_else(|| Some(uid.to_string())),
+        lookup_group_name(gid).or_else(|| Some(gid.to_string())),
+    )
+}
+
+#[cfg(unix)]
+fn lookup_user_name(uid: c_uint) -> Option<String> {
+    unsafe {
+        let ptr = getpwuid(uid);
+        if ptr.is_null() || (*ptr).pw_name.is_null() {
+            return None;
+        }
+        Some(CStr::from_ptr((*ptr).pw_name).to_string_lossy().into_owned())
+    }
+}
+
+#[cfg(unix)]
+fn lookup_group_name(gid: c_uint) -> Option<String> {
+    unsafe {
+        let ptr = getgrgid(gid);
+        if ptr.is_null() || (*ptr).gr_name.is_null() {
+            return None;
+        }
+        Some(CStr::from_ptr((*ptr).gr_name).to_string_lossy().into_owned())
+    }
+}
+
+#[cfg(unix)]
+#[repr(C)]
+struct Passwd {
+    pw_name: *mut c_char,
+    pw_passwd: *mut c_char,
+    pw_uid: c_uint,
+    pw_gid: c_uint,
+    pw_gecos: *mut c_char,
+    pw_dir: *mut c_char,
+    pw_shell: *mut c_char,
+}
+
+#[cfg(unix)]
+#[repr(C)]
+struct Group {
+    gr_name: *mut c_char,
+    gr_passwd: *mut c_char,
+    gr_gid: c_uint,
+    gr_mem: *mut *mut c_char,
+}
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn getpwuid(uid: c_uint) -> *mut Passwd;
+    fn getgrgid(gid: c_uint) -> *mut Group;
 }
 
 #[cfg(test)]
@@ -457,6 +574,10 @@ mod tests {
             path: PathBuf::from(name),
             is_dir,
             size: if is_dir { None } else { Some(1) },
+            modified: None,
+            permissions: None,
+            owner: None,
+            group: None,
         }
     }
 
@@ -659,5 +780,26 @@ mod tests {
         assert_eq!(app.mode, Mode::Browse);
         assert!(app.filter_input.is_empty());
         assert_eq!(app.status_message, "cd: parent directory not found");
+    }
+
+    #[test]
+    fn read_sorted_entries_adds_parent_with_empty_metadata() {
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-parent-meta-{}", std::process::id()));
+        let sub = base.join("sub");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&sub).expect("create temp dirs");
+
+        let entries = read_sorted_entries(&sub).expect("read entries");
+
+        assert!(!entries.is_empty());
+        let parent = &entries[0];
+        assert_eq!(parent.name, "..");
+        assert!(parent.modified.is_none());
+        assert!(parent.permissions.is_none());
+        assert!(parent.owner.is_none());
+        assert!(parent.group.is_none());
+
+        let _ = std::fs::remove_dir_all(base);
     }
 }
