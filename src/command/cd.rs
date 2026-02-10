@@ -50,6 +50,12 @@ mod tests {
                 path: sub.clone(),
                 is_dir: true,
                 size: None,
+                modified: None,
+                permissions: None,
+                uid: None,
+                gid: None,
+                owner: None,
+                group: None,
             }],
             selected_index: 0,
             filter_input: "tmp".to_string(),
@@ -60,7 +66,10 @@ mod tests {
             shell_last_output: None,
             show_shell_popup: false,
             needs_full_redraw: false,
+            status_bar_expanded: false,
             status_message: String::new(),
+            user_name_cache: std::collections::HashMap::new(),
+            group_name_cache: std::collections::HashMap::new(),
         };
 
         let should_quit = run(&mut app);

@@ -12,6 +12,16 @@ cargo build
 cargo run
 ```
 
+## テスト / ビルド実行ルール
+
+このリポジトリでは、環境差分を避けるため Nix 経由で実行します。
+
+```bash
+make test   # nix develop -c cargo test
+make build  # nix develop -c cargo build
+make run    # nix develop -c cargo run
+```
+
 ## 操作
 
 - **j / k** (または ↑↓): 選択移動
@@ -21,6 +31,7 @@ cargo run
 - **:** : コマンドモードに入る
 - **!** : シェル1行実行モードに入る
 - **e**: 選択中のファイル/ディレクトリを `$EDITOR` で開く
+- **m**: Browse の `Status Bar` を展開/折りたたみ（詳細メタデータの表示切替）
 - **q**: 終了
 
 ### フィルタモード

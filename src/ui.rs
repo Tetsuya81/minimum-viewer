@@ -5,6 +5,11 @@ use ratatui::symbols;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
+#[cfg(unix)]
+use std::os::raw::{c_int, c_long};
+#[cfg(unix)]
+use std::ptr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{App, Mode};
 
@@ -12,6 +17,8 @@ const MAX_PATH_WIDTH: u16 = 80;
 const CMD_CANDIDATE_ROWS: u16 = 6;
 const INPUT_ROWS: u16 = 3;
 const SHELL_PANEL_ROWS: u16 = 6;
+const STATUS_BAR_COLLAPSED_ROWS: u16 = 3;
+const STATUS_BAR_EXPANDED_ROWS: u16 = 6;
 
 fn truncate_to_width(s: &str, width: u16) -> String {
     let w = width as usize;
@@ -63,7 +70,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Browse => vec![
             Constraint::Length(3),
             Constraint::Min(3),
-            Constraint::Length(2),
+            Constraint::Length(if app.status_bar_expanded {
+                STATUS_BAR_EXPANDED_ROWS
+            } else {
+                STATUS_BAR_COLLAPSED_ROWS
+            }),
         ],
     };
     let chunks = Layout::default()
@@ -209,26 +220,18 @@ pub fn draw(frame: &mut Frame, app: &App) {
             app.status_message.clone()
         } else {
             app.selected_entry()
-                .map(|e| {
-                    let kind = if e.is_dir { "dir" } else { "file" };
-                    let size = e
-                        .size
-                        .map(|s| human_size(s))
-                        .unwrap_or_else(|| "-".to_string());
-                    format!(" {}  {}  {}", e.name, kind, size)
-                })
+                .map(|e| format_status_bar(e, width.saturating_sub(4), app.status_bar_expanded))
                 .unwrap_or_default()
         };
-        let status_trunc = truncate_to_width(&status, width.saturating_sub(4));
-        let hint = " Move: j/k | Command: : | Filter: / | Shell: ! | Editor: e | Quit: q ";
         let block = Block::default()
-            .title(Line::from(hint))
+            .title(Line::from(" status "))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
             .border_style(Style::default().fg(Color::DarkGray));
-        let para = Paragraph::new(status_trunc)
+        let para = Paragraph::new(status)
             .block(block)
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(Color::Gray))
+            .wrap(Wrap { trim: false });
         frame.render_widget(para, chunks[2]);
     }
 
@@ -274,6 +277,168 @@ fn human_size(n: u64) -> String {
     }
 }
 
+fn format_status_bar(entry: &crate::app::DirEntry, content_width: u16, expanded: bool) -> String {
+    let size = entry
+        .size
+        .map(human_size)
+        .unwrap_or_else(|| "-".to_string());
+    let modified = format_modified(entry.modified);
+    let perm = entry
+        .permissions
+        .clone()
+        .unwrap_or_else(|| "-".to_string());
+    let owner = entry.owner.clone().unwrap_or_else(|| "-".to_string());
+    let group = entry.group.clone().unwrap_or_else(|| "-".to_string());
+
+    if !expanded {
+        return format_status_rows(&[("Modified", modified), ("Size", size)], content_width);
+    }
+    format_status_rows(
+        &[
+            ("Modified", modified),
+            ("Size", size),
+            ("Perm", perm),
+            ("Owner", owner),
+            ("Group", group),
+        ],
+        content_width,
+    )
+}
+
+fn format_status_rows(items: &[(&str, String)], width: u16) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let max = width as usize;
+
+    for (label, value) in items {
+        let segment = format!("{}: {}", label, value);
+        if current.is_empty() {
+            current = segment;
+            continue;
+        }
+        let candidate = format!("{} | {}", current, segment);
+        if max > 0 && candidate.chars().count() <= max {
+            current = candidate;
+        } else {
+            lines.push(current);
+            current = segment;
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+
+    lines.join("\n")
+}
+
+fn format_modified(modified: Option<SystemTime>) -> String {
+    let Some(time) = modified else {
+        return "-".to_string();
+    };
+    let Ok(duration) = time.duration_since(UNIX_EPOCH) else {
+        return "-".to_string();
+    };
+    let secs = duration.as_secs() as i64;
+    format_local_with_offset(secs)
+}
+
+#[cfg(unix)]
+fn format_local_with_offset(secs: i64) -> String {
+    let mut raw_time = secs as TimeT;
+    let mut tm = Tm {
+        tm_sec: 0,
+        tm_min: 0,
+        tm_hour: 0,
+        tm_mday: 0,
+        tm_mon: 0,
+        tm_year: 0,
+        tm_wday: 0,
+        tm_yday: 0,
+        tm_isdst: 0,
+        tm_gmtoff: 0,
+        tm_zone: ptr::null(),
+    };
+    unsafe {
+        if localtime_r(&mut raw_time as *mut TimeT as *const TimeT, &mut tm).is_null() {
+            return format!("{} +00:00", format_unix_utc(secs));
+        }
+    }
+
+    let year = tm.tm_year as i64 + 1900;
+    let month = tm.tm_mon as i64 + 1;
+    let day = tm.tm_mday as i64;
+    let hour = tm.tm_hour as i64;
+    let minute = tm.tm_min as i64;
+    let offset = tm.tm_gmtoff;
+    let sign = if offset >= 0 { '+' } else { '-' };
+    let abs = offset.abs();
+    let off_hour = abs / 3600;
+    let off_min = (abs % 3600) / 60;
+
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02} {}{:02}:{:02}",
+        year, month, day, hour, minute, sign, off_hour, off_min
+    )
+}
+
+#[cfg(not(unix))]
+fn format_local_with_offset(secs: i64) -> String {
+    format!("{} +00:00", format_unix_utc(secs))
+}
+
+fn format_unix_utc(secs: i64) -> String {
+    let days = secs.div_euclid(86_400);
+    let day_seconds = secs.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = day_seconds / 3_600;
+    let minute = (day_seconds % 3_600) / 60;
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}",
+        year, month, day, hour, minute
+    )
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if m <= 2 { 1 } else { 0 };
+    (year, m, d)
+}
+
+#[cfg(unix)]
+type TimeT = i64;
+
+#[cfg(unix)]
+#[repr(C)]
+struct Tm {
+    tm_sec: c_int,
+    tm_min: c_int,
+    tm_hour: c_int,
+    tm_mday: c_int,
+    tm_mon: c_int,
+    tm_year: c_int,
+    tm_wday: c_int,
+    tm_yday: c_int,
+    tm_isdst: c_int,
+    tm_gmtoff: c_long,
+    tm_zone: *const i8,
+}
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn localtime_r(timep: *const TimeT, result: *mut Tm) -> *mut Tm;
+}
+
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -292,4 +457,107 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn unix_epoch_formats_as_expected() {
+        assert_eq!(format_unix_utc(0), "1970-01-01 00:00");
+    }
+
+    #[test]
+    fn status_bar_collapsed_contains_only_size_and_modified() {
+        let entry = crate::app::DirEntry {
+            name: "example.txt".to_string(),
+            path: PathBuf::from("example.txt"),
+            is_dir: false,
+            size: Some(1234),
+            modified: Some(UNIX_EPOCH),
+            permissions: Some("rw-r--r--".to_string()),
+            uid: None,
+            gid: None,
+            owner: Some("alice".to_string()),
+            group: Some("staff".to_string()),
+        };
+
+        let status = format_status_bar(&entry, 80, false);
+        let modified_pos = status.find("Modified: ").expect("Modified must exist");
+        let size_pos = status.find("Size: 1.2K").expect("Size must exist");
+        assert!(modified_pos < size_pos);
+        assert!(status.contains(" +"));
+        assert!(!status.contains("…"));
+        assert!(!status.contains("Perm:"));
+        assert!(!status.contains("Owner:"));
+        assert!(!status.contains("Group:"));
+    }
+
+    #[test]
+    fn status_bar_expanded_contains_permission_owner_group() {
+        let entry = crate::app::DirEntry {
+            name: "example.txt".to_string(),
+            path: PathBuf::from("example.txt"),
+            is_dir: false,
+            size: Some(1234),
+            modified: Some(UNIX_EPOCH),
+            permissions: Some("rw-r--r--".to_string()),
+            uid: None,
+            gid: None,
+            owner: Some("alice".to_string()),
+            group: Some("staff".to_string()),
+        };
+
+        let status = format_status_bar(&entry, 80, true);
+
+        let modified_pos = status.find("Modified: ").expect("Modified must exist");
+        let size_pos = status.find("Size: 1.2K").expect("Size must exist");
+        let perm_pos = status.find("Perm: rw-r--r--").expect("Perm must exist");
+        let owner_pos = status.find("Owner: alice").expect("Owner must exist");
+        let group_pos = status.find("Group: staff").expect("Group must exist");
+        assert!(modified_pos < size_pos);
+        assert!(size_pos < perm_pos);
+        assert!(perm_pos < owner_pos);
+        assert!(owner_pos < group_pos);
+        assert!(status.contains("Perm: rw-r--r--"));
+        assert!(status.contains("Owner: alice"));
+        assert!(status.contains("Group: staff"));
+        assert!(!status.contains("…"));
+    }
+
+    #[test]
+    fn status_bar_expanded_small_width_breaks_into_multiple_lines() {
+        let entry = crate::app::DirEntry {
+            name: "example.txt".to_string(),
+            path: PathBuf::from("example.txt"),
+            is_dir: false,
+            size: Some(1234),
+            modified: Some(UNIX_EPOCH),
+            permissions: Some("rw-r--r--".to_string()),
+            uid: None,
+            gid: None,
+            owner: Some("alice".to_string()),
+            group: Some("staff".to_string()),
+        };
+
+        let status = format_status_bar(&entry, 30, true);
+        let lines: Vec<&str> = status.lines().collect();
+        assert!(lines.len() >= 3);
+    }
+
+    #[test]
+    fn modified_has_timezone_offset_format() {
+        let rendered = format_modified(Some(UNIX_EPOCH));
+        let bytes = rendered.as_bytes();
+        assert_eq!(bytes.len(), 23);
+        assert_eq!(bytes[4], b'-');
+        assert_eq!(bytes[7], b'-');
+        assert_eq!(bytes[10], b' ');
+        assert_eq!(bytes[13], b':');
+        assert_eq!(bytes[16], b' ');
+        assert!(bytes[17] == b'+' || bytes[17] == b'-');
+        assert_eq!(bytes[20], b':');
+    }
 }

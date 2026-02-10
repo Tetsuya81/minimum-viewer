@@ -46,8 +46,11 @@
 ### Browse
 - `Status Bar`
   - 位置: `Bottom`
-  - 画面タイトル: `Move : j/k | Command : ! | Filter : / | Shell : ':' | Quit : q`
-  - 内容: ステータスメッセージまたは選択中エントリ情報
+  - 画面タイトル: `status`
+  - 内容:
+    - 折りたたみ（初期）: ステータスメッセージまたは `Modified`, `Size` の1行表示
+    - 展開（`m`）: `Modified`, `Size`, `Perm`, `Owner`, `Group` を表示
+    - 狭幅時: 見切れ防止のため1項目1行へ自動切替
 
 ### Filter
 - `Filter Input Bar`
@@ -81,7 +84,7 @@
 |---|---|---|---|
 | Current Directory Bar | `current directory` | `draw(): path_block / path_para` | 全Mode |
 | File List Pane | `files (x/y)` | `draw(): list_block / list` | 全Mode |
-| Status Bar | `Move : j/k | Command : ! | Filter : / | Shell : ':' | Quit : q` | `draw(): block / para` (Browse分岐) | `Mode::Browse` |
+| Status Bar | `status` | `draw(): block / para` (Browse分岐) | `Mode::Browse` |
 | Filter Input Bar | `filter (/): Enter apply Esc clear` | `draw(): filter_block / filter_para` | `Mode::Filter` |
 | Command Input Bar | `command (:): Enter run Esc cancel` | `draw(): cmd_block / cmd_para` | `Mode::Command` |
 | Command Candidates Pane | `commands` | `draw(): cand_block / cand_list` | `Mode::Command` |
