@@ -2,8 +2,6 @@
 pub enum CommandId {
     Quit,
     Cd,
-    Open,
-    Editor,
     Mkdir,
     Delete,
     Rename,
@@ -14,4 +12,5 @@ pub struct CommandSpec {
     pub id: CommandId,
     pub name: &'static str,
     pub aliases: &'static [&'static str],
+    pub description: &'static str,
 }

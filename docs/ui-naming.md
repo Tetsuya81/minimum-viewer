@@ -59,14 +59,14 @@
   - 内容: `/<query>`
 
 ### Command
-- `Command Input Bar`
-  - 位置: `Bottom`
-  - 画面タイトル: `command (:): Enter run Esc cancel`
-  - 内容: `:<query>`
 - `Command Candidates Pane`
-  - 位置: `Bottom`（Command入力バーの下）
-  - 画面タイトル: `commands`
+  - 位置: `Bottom`（上段）
+  - 画面タイトル: `commands (Tab next / Shift+Tab prev)`
   - 内容: コマンド候補一覧
+- `Command Input Bar`
+  - 位置: `Bottom`（下段）
+  - 画面タイトル: `command (:): Enter run Esc cancel Tab select Shift+Tab reverse`
+  - 内容: `:<query>`（カーソルは末尾表示）
 
 ### Shell
 - `Shell Input Bar`
@@ -86,8 +86,8 @@
 | File List Pane | `files (x/y)` | `draw(): list_block / list` | 全Mode |
 | Status Bar | `status` | `draw(): block / para` (Browse分岐) | `Mode::Browse` |
 | Filter Input Bar | `filter (/): Enter apply Esc clear` | `draw(): filter_block / filter_para` | `Mode::Filter` |
-| Command Input Bar | `command (:): Enter run Esc cancel` | `draw(): cmd_block / cmd_para` | `Mode::Command` |
-| Command Candidates Pane | `commands` | `draw(): cand_block / cand_list` | `Mode::Command` |
+| Command Candidates Pane | `commands (Tab next / Shift+Tab prev)` | `draw(): cand_block / cand_list` | `Mode::Command` |
+| Command Input Bar | `command (:): Enter run Esc cancel Tab select Shift+Tab reverse` | `draw(): cmd_block / cmd_para` | `Mode::Command` |
 | Shell Input Bar | `shell (!): Enter run Esc cancel` | `draw(): shell_block / shell_para` | `Mode::Shell` |
 | Shell Help Panel | `shell` | `draw(): panel_block / panel_para` | `Mode::Shell` |
 | Shell Output Popup | `shell output: ... (exit ...)` | `draw(): popup_area / popup para` | `app.show_shell_popup == true` |

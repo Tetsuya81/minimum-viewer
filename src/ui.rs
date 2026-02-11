@@ -53,8 +53,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Command => vec![
             Constraint::Length(2),
             Constraint::Min(3),
-            Constraint::Length(INPUT_ROWS),
             Constraint::Length(CMD_CANDIDATE_ROWS),
+            Constraint::Length(INPUT_ROWS),
         ],
         Mode::Shell => vec![
             Constraint::Length(2),
@@ -145,19 +145,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
     frame.render_stateful_widget(list, chunks[1], &mut list_state);
 
     if app.mode == Mode::Command {
-        let cmd_line = format!(":{}", app.command_input);
-        let cmd_block = Block::default()
-            .title(Line::from(" command (:): Enter run Esc cancel "))
-            .borders(Borders::ALL)
-            .border_set(symbols::border::ROUNDED)
-            .border_style(Style::default().fg(Color::Yellow));
-        let cmd_para = Paragraph::new(cmd_line)
-            .block(cmd_block)
-            .style(Style::default().fg(Color::Yellow));
-        frame.render_widget(cmd_para, chunks[2]);
-
         let cand_block = Block::default()
-            .title(Line::from(" commands "))
+            .title(Line::from(" commands (Tab next / Shift+Tab prev) "))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
             .border_style(Style::default().fg(Color::DarkGray));
@@ -166,7 +155,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .iter()
             .enumerate()
             .map(|(i, s)| {
-                let style = if i == app.command_selected {
+                let style = if app.command_selected == Some(i) {
                     Style::default().fg(Color::Black).bg(Color::Yellow)
                 } else {
                     Style::default().fg(Color::Gray)
@@ -179,8 +168,34 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .highlight_style(Style::default().fg(Color::Black).bg(Color::Yellow))
             .highlight_symbol("▸ ");
         let mut cand_state = ListState::default();
-        cand_state.select(Some(app.command_selected));
-        frame.render_stateful_widget(cand_list, chunks[3], &mut cand_state);
+        cand_state.select(app.command_selected);
+        frame.render_stateful_widget(cand_list, chunks[2], &mut cand_state);
+
+        let cmd_line = format!(":{}", app.command_input);
+        let cmd_block = Block::default()
+            .title(Line::from(
+                " command (:): Enter run Esc cancel Tab select Shift+Tab reverse ",
+            ))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(Color::Yellow));
+        let cmd_para = Paragraph::new(cmd_line)
+            .block(cmd_block)
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(cmd_para, chunks[3]);
+
+        let desired_cursor_x = chunks[3]
+            .x
+            .saturating_add(1)
+            .saturating_add(1)
+            .saturating_add(app.command_input.chars().count() as u16);
+        let max_cursor_x = chunks[3]
+            .x
+            .saturating_add(chunks[3].width.saturating_sub(2))
+            .saturating_sub(1);
+        let cursor_x = desired_cursor_x.min(max_cursor_x);
+        let cursor_y = chunks[3].y.saturating_add(1);
+        frame.set_cursor_position((cursor_x, cursor_y));
     } else if app.mode == Mode::Shell {
         let shell_line = format!("!{}", app.shell_input);
         let shell_block = Block::default()
@@ -256,6 +271,24 @@ pub fn draw(frame: &mut Frame, app: &App) {
                         .border_set(symbols::border::ROUNDED)
                         .border_style(Style::default().fg(Color::Yellow)),
                 )
+                .wrap(Wrap { trim: false });
+            frame.render_widget(para, popup_area);
+        }
+    }
+
+    if app.show_help_popup {
+        if let Some(body) = &app.help_popup_body {
+            let popup_area = centered_rect(70, 60, area);
+            frame.render_widget(Clear, popup_area);
+            let para = Paragraph::new(body.as_str())
+                .block(
+                    Block::default()
+                        .title(Line::from(" command help "))
+                        .borders(Borders::ALL)
+                        .border_set(symbols::border::ROUNDED)
+                        .border_style(Style::default().fg(Color::Yellow)),
+                )
+                .style(Style::default().fg(Color::Gray))
                 .wrap(Wrap { trim: false });
             frame.render_widget(para, popup_area);
         }

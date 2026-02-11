@@ -46,9 +46,11 @@ make run    # nix develop -c cargo run
 ### コマンドモード
 
 - `:` のあとにキーワードを入力すると候補が絞り込まれる
+- **Tab / Shift+Tab**: 候補選択（前後循環）
 - **Enter**: 選択したコマンドを実行
 - **Esc**: コマンドモードを抜ける
-- 例: `quit`, `cd`, `editor` (`e` エイリアス), `help` など
+- 利用可能コマンド: `quit` (`q`), `cd`, `mkdir`, `delete`, `rename`, `help` (`?`)
+- `mkdir` は `mkdir <directory_name>` のみ対応（単一トークン）
 
 ### シェルモード
 
@@ -61,4 +63,4 @@ make run    # nix develop -c cargo run
 - `MINIMUM_VIEWER_CWD`: アプリ内の現在ディレクトリ
 - 起動時とディレクトリ移動時（`Enter` / `cd`）に更新される
 - 親シェルには伝播せず、アプリプロセス内でのみ有効
-- `EDITOR`: `editor` コマンドおよび `e` キーバインドで利用するエディタ。未設定時はエラー表示
+- `EDITOR`: `e` キーバインドで利用するエディタ。未設定時はエラー表示
