@@ -32,9 +32,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                     if key.kind != KeyEventKind::Press {
                         continue;
                     }
-                    if app.show_shell_popup {
+                    if app.show_shell_popup || app.show_help_popup {
                         match key.code {
-                            KeyCode::Esc | KeyCode::Enter => app.close_shell_popup(),
+                            KeyCode::Esc | KeyCode::Enter => app.close_active_popup(),
                             _ => {}
                         }
                         continue;
@@ -63,8 +63,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                                 }
                             }
                             KeyCode::Backspace => app.command_pop_char(),
-                            KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),
-                            KeyCode::Down | KeyCode::Char('j') => app.move_selection_down(),
+                            KeyCode::Tab => app.command_select_next(),
+                            KeyCode::BackTab => app.command_select_prev(),
                             KeyCode::Char(c) => app.command_push_char(c),
                             _ => {}
                         },

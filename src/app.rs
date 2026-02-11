@@ -48,6 +48,8 @@ pub struct App {
     pub shell_input: String,
     pub shell_last_output: Option<ShellResult>,
     pub show_shell_popup: bool,
+    pub help_popup_body: Option<String>,
+    pub show_help_popup: bool,
     pub needs_full_redraw: bool,
     pub status_bar_expanded: bool,
     pub status_message: String,
@@ -78,6 +80,8 @@ impl App {
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
+            help_popup_body: None,
+            show_help_popup: false,
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
@@ -318,12 +322,53 @@ impl App {
         }
     }
 
+    pub fn command_select_next(&mut self) {
+        if self.command_candidates.is_empty() {
+            return;
+        }
+        self.command_selected = (self.command_selected + 1) % self.command_candidates.len();
+        self.sync_command_input_to_selected();
+    }
+
+    pub fn command_select_prev(&mut self) {
+        if self.command_candidates.is_empty() {
+            return;
+        }
+        if self.command_selected == 0 {
+            self.command_selected = self.command_candidates.len() - 1;
+        } else {
+            self.command_selected -= 1;
+        }
+        self.sync_command_input_to_selected();
+    }
+
+    fn sync_command_input_to_selected(&mut self) {
+        if let Some(selected) = self.command_candidates.get(self.command_selected) {
+            self.command_input = selected.clone();
+        }
+    }
+
+    fn parse_command_input(&self) -> (String, Vec<String>) {
+        let mut parts = self
+            .command_input
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        if parts.is_empty() {
+            return (String::new(), Vec::new());
+        }
+        let command_name = parts.remove(0);
+        (command_name, parts)
+    }
+
     fn filter_command_candidates(&mut self) {
-        self.command_candidates = command::filter_candidates(&self.command_input);
+        let command_token = self.command_input.split_whitespace().next().unwrap_or("");
+        self.command_candidates = command::filter_candidates(command_token);
     }
 
     pub fn execute_selected_command(&mut self) -> bool {
         let input_cmd = self.command_input.trim().to_string();
+        let (command_name, args) = self.parse_command_input();
         let cand_len = self.command_candidates.len();
         let sel = self.command_selected;
         let cmd_opt = self
@@ -343,15 +388,16 @@ impl App {
             "H3",
         );
 
-        let cmd =
-            command::resolve_command(&input_cmd, self.command_selected, &self.command_candidates);
+        let cmd = command::resolve_command(
+            &command_name,
+            self.command_selected,
+            &self.command_candidates,
+        );
         self.exit_command_mode();
         match cmd {
             Some(CommandId::Quit) => return command::quit::run(self),
             Some(CommandId::Cd) => return command::cd::run(self),
-            Some(CommandId::Open) => return command::open::run(self),
-            Some(CommandId::Editor) => return command::editor::run(self),
-            Some(CommandId::Mkdir) => return command::mkdir::run(self),
+            Some(CommandId::Mkdir) => return command::mkdir::run(self, &args),
             Some(CommandId::Delete) => return command::delete::run(self),
             Some(CommandId::Rename) => return command::rename::run(self),
             Some(CommandId::Help) => return command::help::run(self),
@@ -418,6 +464,26 @@ impl App {
         self.show_shell_popup = false;
         self.shell_last_output = None;
         self.shell_input.clear();
+    }
+
+    pub fn open_help_popup(&mut self, body: String) {
+        self.help_popup_body = Some(body);
+        self.show_help_popup = true;
+    }
+
+    pub fn close_help_popup(&mut self) {
+        self.show_help_popup = false;
+        self.help_popup_body = None;
+    }
+
+    pub fn close_active_popup(&mut self) {
+        if self.show_shell_popup {
+            self.close_shell_popup();
+            return;
+        }
+        if self.show_help_popup {
+            self.close_help_popup();
+        }
     }
 
     pub fn request_full_redraw(&mut self) {
@@ -666,6 +732,8 @@ mod tests {
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
+            help_popup_body: None,
+            show_help_popup: false,
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
@@ -793,6 +861,34 @@ mod tests {
         app.command_selected = 2;
         app.move_selection_down();
         assert_eq!(app.command_selected, 2);
+    }
+
+    #[test]
+    fn command_select_next_cycles_and_syncs_input() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_candidates = vec!["cd".to_string(), "mkdir".to_string()];
+        app.command_selected = 0;
+
+        app.command_select_next();
+        assert_eq!(app.command_selected, 1);
+        assert_eq!(app.command_input, "mkdir");
+
+        app.command_select_next();
+        assert_eq!(app.command_selected, 0);
+        assert_eq!(app.command_input, "cd");
+    }
+
+    #[test]
+    fn command_select_prev_cycles_and_syncs_input() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_candidates = vec!["cd".to_string(), "mkdir".to_string()];
+        app.command_selected = 0;
+
+        app.command_select_prev();
+        assert_eq!(app.command_selected, 1);
+        assert_eq!(app.command_input, "mkdir");
     }
 
     #[test]

@@ -3,7 +3,6 @@ pub mod delete;
 pub mod editor;
 pub mod help;
 pub mod mkdir;
-pub mod open;
 pub mod quit;
 pub mod rename;
 pub mod types;
@@ -15,41 +14,37 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         id: CommandId::Quit,
         name: "quit",
         aliases: &["q"],
+        description: "Quit minimum-viewer.",
     },
     CommandSpec {
         id: CommandId::Cd,
         name: "cd",
         aliases: &[],
-    },
-    CommandSpec {
-        id: CommandId::Open,
-        name: "open",
-        aliases: &[],
-    },
-    CommandSpec {
-        id: CommandId::Editor,
-        name: "editor",
-        aliases: &["e"],
+        description: "Change to selected directory.",
     },
     CommandSpec {
         id: CommandId::Mkdir,
         name: "mkdir",
         aliases: &[],
+        description: "Create directory: mkdir <name>.",
     },
     CommandSpec {
         id: CommandId::Delete,
         name: "delete",
         aliases: &[],
+        description: "Delete selected entry (planned).",
     },
     CommandSpec {
         id: CommandId::Rename,
         name: "rename",
         aliases: &[],
+        description: "Rename selected entry (planned).",
     },
     CommandSpec {
         id: CommandId::Help,
         name: "help",
         aliases: &["?"],
+        description: "Show command help.",
     },
 ];
 
@@ -73,12 +68,18 @@ pub fn resolve_command(input: &str, selected: usize, candidates: &[String]) -> O
     find_by_name_or_alias(candidate_name)
 }
 
-pub fn command_names_csv() -> String {
+pub fn command_help_lines() -> Vec<String> {
     COMMAND_SPECS
         .iter()
-        .map(|spec| spec.name)
-        .collect::<Vec<_>>()
-        .join(", ")
+        .map(|spec| {
+            let aliases = if spec.aliases.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", spec.aliases.join(", "))
+            };
+            format!("{}{} - {}", spec.name, aliases, spec.description)
+        })
+        .collect()
 }
 
 fn find_by_name_or_alias(name: &str) -> Option<CommandId> {
@@ -99,12 +100,7 @@ mod tests {
     #[test]
     fn filter_candidates_returns_all_for_empty_input() {
         let list = filter_candidates("");
-        assert_eq!(
-            list,
-            vec![
-                "quit", "cd", "open", "editor", "mkdir", "delete", "rename", "help"
-            ]
-        );
+        assert_eq!(list, vec!["quit", "cd", "mkdir", "delete", "rename", "help"]);
     }
 
     #[test]
@@ -123,28 +119,28 @@ mod tests {
             resolve_command("?", 0, &["quit".to_string()]),
             Some(CommandId::Help)
         );
-        assert_eq!(
-            resolve_command("editor", 0, &["quit".to_string()]),
-            Some(CommandId::Editor)
-        );
-        assert_eq!(
-            resolve_command("e", 0, &["quit".to_string()]),
-            Some(CommandId::Editor)
-        );
     }
 
     #[test]
     fn resolve_command_falls_back_to_selected_candidate() {
-        let candidates = vec!["open".to_string(), "quit".to_string()];
+        let candidates = vec!["mkdir".to_string(), "quit".to_string()];
         assert_eq!(resolve_command("", 1, &candidates), Some(CommandId::Quit));
         assert_eq!(
             resolve_command("zzz", 0, &candidates),
-            Some(CommandId::Open)
+            Some(CommandId::Mkdir)
         );
     }
 
     #[test]
     fn resolve_command_returns_none_when_no_candidate_exists() {
         assert_eq!(resolve_command("zzz", 0, &[]), None);
+    }
+
+    #[test]
+    fn command_help_lines_includes_descriptions_and_aliases() {
+        let lines = command_help_lines();
+        assert!(lines.iter().any(|line| line.contains("quit [q] -")));
+        assert!(lines.iter().any(|line| line.contains("help [?] -")));
+        assert!(lines.iter().any(|line| line.contains("mkdir -")));
     }
 }

@@ -1,6 +1,7 @@
 use crate::app::App;
 
 pub fn run(app: &mut App) -> bool {
-    app.status_message = format!("commands: {}", super::command_names_csv());
+    let body = super::command_help_lines().join("\n");
+    app.open_help_popup(body);
     false
 }
