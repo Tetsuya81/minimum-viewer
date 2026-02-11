@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const CONFIG_RELATIVE_PATH: &str = "mmv/config.toml";
+const STATE_LASTDIR_RELATIVE_PATH: &str = "mmv/lastdir";
 const DEFAULT_CONFIG_CONTENT: &str = "cd_on_quit = false\n";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,6 +20,10 @@ pub fn load_or_create() -> Result<Config, String> {
 
 pub fn resolve_config_path() -> Result<PathBuf, String> {
     resolve_config_path_from(|name| std::env::var_os(name))
+}
+
+pub fn resolve_lastdir_path() -> Result<PathBuf, String> {
+    resolve_lastdir_path_from(|name| std::env::var_os(name))
 }
 
 fn resolve_config_path_from<F>(get_env: F) -> Result<PathBuf, String>
@@ -47,6 +52,34 @@ where
     }
 
     Err("HOME is not set and no config override was provided".to_string())
+}
+
+fn resolve_lastdir_path_from<F>(get_env: F) -> Result<PathBuf, String>
+where
+    F: Fn(&str) -> Option<OsString>,
+{
+    if let Some(explicit) = get_env("MINIMUM_VIEWER_LAST_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+    {
+        return Ok(explicit);
+    }
+
+    if let Some(xdg_state_home) = get_env("XDG_STATE_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+    {
+        return Ok(xdg_state_home.join(STATE_LASTDIR_RELATIVE_PATH));
+    }
+
+    if let Some(home) = get_env("HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+    {
+        return Ok(home.join(".local/state").join(STATE_LASTDIR_RELATIVE_PATH));
+    }
+
+    Err("HOME is not set and no lastdir override was provided".to_string())
 }
 
 fn ensure_exists_with_default(path: &Path) -> std::io::Result<()> {
@@ -170,5 +203,41 @@ mod tests {
     fn parse_config_rejects_invalid_boolean() {
         let err = parse_config("cd_on_quit = maybe\n").expect_err("must fail");
         assert!(err.contains("cd_on_quit must be true or false"));
+    }
+
+    #[test]
+    fn resolve_lastdir_path_prefers_override() {
+        let resolved = resolve_lastdir_path_from(|name| match name {
+            "MINIMUM_VIEWER_LAST_DIR" => Some(OsString::from("/tmp/mmv-lastdir")),
+            "XDG_STATE_HOME" => Some(OsString::from("/tmp/state")),
+            "HOME" => Some(OsString::from("/tmp/home")),
+            _ => None,
+        })
+        .expect("path must resolve");
+
+        assert_eq!(resolved, PathBuf::from("/tmp/mmv-lastdir"));
+    }
+
+    #[test]
+    fn resolve_lastdir_path_uses_xdg_state_home() {
+        let resolved = resolve_lastdir_path_from(|name| match name {
+            "XDG_STATE_HOME" => Some(OsString::from("/tmp/state")),
+            "HOME" => Some(OsString::from("/tmp/home")),
+            _ => None,
+        })
+        .expect("path must resolve");
+
+        assert_eq!(resolved, PathBuf::from("/tmp/state/mmv/lastdir"));
+    }
+
+    #[test]
+    fn resolve_lastdir_path_falls_back_to_home_state_dir() {
+        let resolved = resolve_lastdir_path_from(|name| match name {
+            "HOME" => Some(OsString::from("/tmp/home")),
+            _ => None,
+        })
+        .expect("path must resolve");
+
+        assert_eq!(resolved, PathBuf::from("/tmp/home/.local/state/mmv/lastdir"));
     }
 }

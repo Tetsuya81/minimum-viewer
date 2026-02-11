@@ -1,10 +1,13 @@
 mod app;
 mod command;
+mod config;
 mod debug_log;
 mod ui;
 
 use std::io::{self, stdout, Stdout};
+use std::path::Path;
 use std::time::Duration;
+use std::{fs, io::ErrorKind};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal::{
@@ -16,6 +19,34 @@ use ratatui::Terminal;
 
 use app::{App, Mode};
 use ui::draw;
+
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn build_cd_on_quit_command(path: &Path) -> String {
+    let path_str = path.to_string_lossy();
+    format!("cd {}", shell_single_quote(path_str.as_ref()))
+}
+
+fn write_cd_on_quit_file(lastdir_path: &Path, cwd: &Path) -> io::Result<()> {
+    if let Some(parent) = lastdir_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(lastdir_path, format!("{}\n", build_cd_on_quit_command(cwd)))
+}
+
+fn maybe_write_cd_on_quit_file(
+    quit: bool,
+    enabled: bool,
+    lastdir_path: &Path,
+    cwd: &Path,
+) -> io::Result<()> {
+    if quit && enabled {
+        write_cd_on_quit_file(lastdir_path, cwd)?;
+    }
+    Ok(())
+}
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<bool> {
     loop {
@@ -129,8 +160,85 @@ fn main() -> io::Result<()> {
     disable_raw_mode()?;
     terminal.show_cursor()?;
 
+    if let Ok(lastdir_path) = config::resolve_lastdir_path() {
+        if let Err(err) =
+            maybe_write_cd_on_quit_file(quit, app.cd_on_quit_enabled, &lastdir_path, &app.current_dir)
+        {
+            if err.kind() != ErrorKind::NotFound {
+                eprintln!("mmv: failed to write lastdir file: {}", err);
+            }
+        }
+    } else if quit && app.cd_on_quit_enabled {
+        eprintln!("mmv: failed to resolve lastdir path");
+    }
+
     if quit {
         std::process::exit(0);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn shell_single_quote_escapes_single_quote() {
+        assert_eq!(shell_single_quote("a'b"), "'a'\"'\"'b'");
+    }
+
+    #[test]
+    fn write_cd_on_quit_file_writes_command() {
+        let root = std::env::temp_dir().join(format!("minimum-viewer-lastdir-write-{}", std::process::id()));
+        let lastdir_path = root.join("nested/lastdir");
+        let _ = fs::remove_dir_all(&root);
+
+        write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/work")).expect("write must succeed");
+        let written = fs::read_to_string(&lastdir_path).expect("lastdir file must exist");
+        assert_eq!(written, "cd '/tmp/work'\n");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn maybe_write_cd_on_quit_file_skips_when_disabled() {
+        let root =
+            std::env::temp_dir().join(format!("minimum-viewer-lastdir-disabled-{}", std::process::id()));
+        let lastdir_path = root.join("lastdir");
+        let _ = fs::remove_dir_all(&root);
+
+        maybe_write_cd_on_quit_file(true, false, &lastdir_path, &PathBuf::from("/tmp/work"))
+            .expect("write check must succeed");
+        assert!(!lastdir_path.exists());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn maybe_write_cd_on_quit_file_skips_when_not_quit() {
+        let root =
+            std::env::temp_dir().join(format!("minimum-viewer-lastdir-notquit-{}", std::process::id()));
+        let lastdir_path = root.join("lastdir");
+        let _ = fs::remove_dir_all(&root);
+
+        maybe_write_cd_on_quit_file(false, true, &lastdir_path, &PathBuf::from("/tmp/work"))
+            .expect("write check must succeed");
+        assert!(!lastdir_path.exists());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn write_cd_on_quit_file_escapes_single_quote() {
+        let root = std::env::temp_dir().join(format!("minimum-viewer-lastdir-quote-{}", std::process::id()));
+        let lastdir_path = root.join("lastdir");
+        let _ = fs::remove_dir_all(&root);
+
+        write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/a'b")).expect("write must succeed");
+        let written = fs::read_to_string(&lastdir_path).expect("lastdir file must exist");
+        assert_eq!(written, "cd '/tmp/a'\"'\"'b'\n");
+
+        let _ = fs::remove_dir_all(root);
+    }
 }

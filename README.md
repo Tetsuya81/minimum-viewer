@@ -64,20 +64,22 @@ make run    # nix develop -c cargo run
 - 起動時とディレクトリ移動時（`Enter` / `cd`）に更新される
 - 親シェルには伝播せず、アプリプロセス内でのみ有効
 - `MINIMUM_VIEWER_CONFIG`: 設定ファイルのパスを明示する（未指定時は XDG パスを利用）
+- `MINIMUM_VIEWER_LAST_DIR`: `cd_on_quit` で使うコマンドファイルのパスを明示する
 - `EDITOR`: `e` キーバインドで利用するエディタ。未設定時はエラー表示
 
 ## `cd_on_quit` を有効化する場合の shell wrapper
 
-`cd_on_quit = true` のとき、`mmv` は終了時に `cd '...'` コマンドを標準出力へ出力します。  
-親シェル側でそれを `eval` するため、`~/.zshrc` か `~/.bashrc` に次を追加してください。
+`cd_on_quit = true` のとき、`mmv` は終了時に `cd '...'` コマンドを `lastdir` ファイルへ書き込みます。  
+wrapper は `lastdir` ファイルを `. (source)` してから削除します。`~/.zshrc` か `~/.bashrc` に次を追加してください。
 
 ```bash
 mmv() {
-  local cmd
-  cmd="$(command mmv "$@")"
+  local lastdir="${MINIMUM_VIEWER_LAST_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mmv/lastdir}"
+  command mmv "$@"
   local status=$?
-  if [ $status -eq 0 ] && [ -n "$cmd" ]; then
-    eval "$cmd"
+  if [ $status -eq 0 ] && [ -f "$lastdir" ]; then
+    . "$lastdir"
+    rm -f "$lastdir"
   fi
   return $status
 }
