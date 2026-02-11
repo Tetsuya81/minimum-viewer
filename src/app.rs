@@ -12,6 +12,7 @@ use std::time::SystemTime;
 
 use crate::command;
 use crate::command::types::CommandId;
+use crate::config;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -53,6 +54,7 @@ pub struct App {
     pub needs_full_redraw: bool,
     pub status_bar_expanded: bool,
     pub status_message: String,
+    pub cd_on_quit_enabled: bool,
     pub user_name_cache: HashMap<u32, String>,
     pub group_name_cache: HashMap<u32, String>,
 }
@@ -67,6 +69,10 @@ pub struct ShellResult {
 impl App {
     pub fn new() -> Self {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let (cd_on_quit_enabled, config_error_message) = match config::load_or_create() {
+            Ok(cfg) => (cfg.cd_on_quit, None),
+            Err(err) => (false, Some(format!("config: {}", err))),
+        };
         let mut app = Self {
             mode: Mode::Browse,
             current_dir,
@@ -84,7 +90,8 @@ impl App {
             show_help_popup: false,
             needs_full_redraw: false,
             status_bar_expanded: false,
-            status_message: String::new(),
+            status_message: config_error_message.unwrap_or_default(),
+            cd_on_quit_enabled,
             user_name_cache: HashMap::new(),
             group_name_cache: HashMap::new(),
         };
@@ -776,6 +783,7 @@ mod tests {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
+            cd_on_quit_enabled: false,
             user_name_cache: HashMap::new(),
             group_name_cache: HashMap::new(),
         }

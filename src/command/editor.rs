@@ -105,6 +105,7 @@ mod tests {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
+            cd_on_quit_enabled: false,
             user_name_cache: std::collections::HashMap::new(),
             group_name_cache: std::collections::HashMap::new(),
         }

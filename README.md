@@ -63,4 +63,33 @@ make run    # nix develop -c cargo run
 - `MINIMUM_VIEWER_CWD`: アプリ内の現在ディレクトリ
 - 起動時とディレクトリ移動時（`Enter` / `cd`）に更新される
 - 親シェルには伝播せず、アプリプロセス内でのみ有効
+- `MINIMUM_VIEWER_CONFIG`: 設定ファイルのパスを明示する（未指定時は XDG パスを利用）
+- `MINIMUM_VIEWER_LAST_DIR`: `cd_on_quit` で使うコマンドファイルのパスを明示する
+  - 未指定時は `${XDG_STATE_HOME:-$HOME/.local/state}/mmv/lastdir` を利用
 - `EDITOR`: `e` キーバインドで利用するエディタ。未設定時はエラー表示
+
+`XDG_CONFIG_HOME` は `config.toml` の配置にのみ使い、`lastdir` には使いません。
+
+## `cd_on_quit` を有効化する場合の shell wrapper
+
+`cd_on_quit = true` のとき、`mmv` は終了時に `cd -- '...'` コマンドを `lastdir` ファイルへ書き込みます。  
+wrapper は `lastdir` ファイルを `. (source)` してから削除します。`~/.zshrc` か `~/.bashrc` に次を追加してください。
+
+```bash
+mmv() {
+  local lastdir="${MINIMUM_VIEWER_LAST_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mmv/lastdir}"
+  command mmv "$@"
+  local exit_code=$?
+  if [ $exit_code -eq 0 ] && [ -f "$lastdir" ]; then
+    . "$lastdir"
+    rm -f "$lastdir"
+  fi
+  return $exit_code
+}
+```
+
+設定ファイル例（`$XDG_CONFIG_HOME/mmv/config.toml` または `~/.config/mmv/config.toml`）:
+
+```toml
+cd_on_quit = true
+```
