@@ -161,8 +161,10 @@ mod tests {
 
     #[test]
     fn load_or_create_writes_default_config_when_missing() {
-        let root =
-            std::env::temp_dir().join(format!("minimum-viewer-config-create-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "minimum-viewer-config-create-{}",
+            std::process::id()
+        ));
         let config_path = root.join("config.toml");
         let _ = fs::remove_dir_all(&root);
 
@@ -238,6 +240,9 @@ mod tests {
         })
         .expect("path must resolve");
 
-        assert_eq!(resolved, PathBuf::from("/tmp/home/.local/state/mmv/lastdir"));
+        assert_eq!(
+            resolved,
+            PathBuf::from("/tmp/home/.local/state/mmv/lastdir")
+        );
     }
 }

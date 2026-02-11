@@ -3,6 +3,7 @@ pub mod delete;
 pub mod editor;
 pub mod help;
 pub mod mkdir;
+pub mod path;
 pub mod quit;
 pub mod rename;
 pub mod types;
@@ -20,7 +21,7 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         id: CommandId::Cd,
         name: "cd",
         aliases: &[],
-        description: "Change to selected directory.",
+        description: "Change directory: cd [path].",
     },
     CommandSpec {
         id: CommandId::Mkdir,
@@ -32,13 +33,13 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         id: CommandId::Delete,
         name: "delete",
         aliases: &[],
-        description: "Delete selected entry (planned).",
+        description: "Delete file/dir: delete [path].",
     },
     CommandSpec {
         id: CommandId::Rename,
         name: "rename",
         aliases: &[],
-        description: "Rename selected entry (planned).",
+        description: "Rename selected entry: rename <new_name>.",
     },
     CommandSpec {
         id: CommandId::Help,
@@ -104,7 +105,10 @@ mod tests {
     #[test]
     fn filter_candidates_returns_all_for_empty_input() {
         let list = filter_candidates("");
-        assert_eq!(list, vec!["quit", "cd", "mkdir", "delete", "rename", "help"]);
+        assert_eq!(
+            list,
+            vec!["quit", "cd", "mkdir", "delete", "rename", "help"]
+        );
     }
 
     #[test]
@@ -128,7 +132,10 @@ mod tests {
     #[test]
     fn resolve_command_falls_back_to_selected_candidate() {
         let candidates = vec!["mkdir".to_string(), "quit".to_string()];
-        assert_eq!(resolve_command("", Some(1), &candidates), Some(CommandId::Quit));
+        assert_eq!(
+            resolve_command("", Some(1), &candidates),
+            Some(CommandId::Quit)
+        );
         assert_eq!(
             resolve_command("zzz", Some(0), &candidates),
             Some(CommandId::Mkdir)

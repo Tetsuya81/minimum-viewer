@@ -102,6 +102,8 @@ mod tests {
             show_shell_popup: false,
             help_popup_body: None,
             show_help_popup: false,
+            show_delete_confirm: false,
+            pending_delete: None,
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),

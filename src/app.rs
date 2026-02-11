@@ -51,6 +51,8 @@ pub struct App {
     pub show_shell_popup: bool,
     pub help_popup_body: Option<String>,
     pub show_help_popup: bool,
+    pub show_delete_confirm: bool,
+    pub pending_delete: Option<PendingDelete>,
     pub needs_full_redraw: bool,
     pub status_bar_expanded: bool,
     pub status_message: String,
@@ -64,6 +66,11 @@ pub struct ShellResult {
     pub stdout: String,
     pub stderr: String,
     pub ran_shell: String,
+}
+
+#[derive(Clone)]
+pub struct PendingDelete {
+    pub path: PathBuf,
 }
 
 impl App {
@@ -88,6 +95,8 @@ impl App {
             show_shell_popup: false,
             help_popup_body: None,
             show_help_popup: false,
+            show_delete_confirm: false,
+            pending_delete: None,
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: config_error_message.unwrap_or_default(),
@@ -191,7 +200,12 @@ impl App {
         {
             let (uid, gid, owner_missing, group_missing) = {
                 let entry = &self.entries[idx];
-                (entry.uid, entry.gid, entry.owner.is_none(), entry.group.is_none())
+                (
+                    entry.uid,
+                    entry.gid,
+                    entry.owner.is_none(),
+                    entry.group.is_none(),
+                )
             };
 
             let owner = if owner_missing {
@@ -380,10 +394,12 @@ impl App {
         let input_cmd = self.command_input.trim().to_string();
         let (command_name, args) = self.parse_command_input();
         let cand_len = self.command_candidates.len();
-        let sel = self.command_selected
+        let sel = self
+            .command_selected
             .map(|idx| idx.to_string())
             .unwrap_or_else(|| "none".to_string());
-        let cmd_opt = self.command_selected
+        let cmd_opt = self
+            .command_selected
             .and_then(|idx| self.command_candidates.get(idx))
             .map(|s| s.as_str())
             .unwrap_or("(none)");
@@ -419,26 +435,14 @@ impl App {
                 return command::quit::run(self);
             }
             Some(CommandId::Cd) => {
-                if !args.is_empty() {
-                    self.status_message = "cd: unexpected arguments".to_string();
-                    return false;
-                }
-                return command::cd::run(self);
+                return command::cd::run(self, &args);
             }
             Some(CommandId::Mkdir) => return command::mkdir::run(self, &args),
             Some(CommandId::Delete) => {
-                if !args.is_empty() {
-                    self.status_message = "delete: unexpected arguments".to_string();
-                    return false;
-                }
-                return command::delete::run(self);
+                return command::delete::run(self, &args);
             }
             Some(CommandId::Rename) => {
-                if !args.is_empty() {
-                    self.status_message = "rename: unexpected arguments".to_string();
-                    return false;
-                }
-                return command::rename::run(self);
+                return command::rename::run(self, &args);
             }
             Some(CommandId::Help) => {
                 if !args.is_empty() {
@@ -522,7 +526,43 @@ impl App {
         self.help_popup_body = None;
     }
 
+    pub fn open_delete_confirm(&mut self, path: PathBuf) {
+        self.pending_delete = Some(PendingDelete { path });
+        self.show_delete_confirm = true;
+        self.status_message = "delete: confirm with y/N".to_string();
+    }
+
+    pub fn confirm_delete_yes(&mut self) {
+        let Some(pending) = self.pending_delete.clone() else {
+            self.show_delete_confirm = false;
+            return;
+        };
+
+        let result = std::fs::remove_dir_all(&pending.path);
+        self.show_delete_confirm = false;
+        self.pending_delete = None;
+        match result {
+            Ok(()) => {
+                self.reload_entries();
+                self.status_message = format!("delete: removed '{}'", pending.path.display());
+            }
+            Err(err) => {
+                self.status_message = format!("delete: {}: {}", pending.path.display(), err);
+            }
+        }
+    }
+
+    pub fn confirm_delete_no(&mut self) {
+        self.show_delete_confirm = false;
+        self.pending_delete = None;
+        self.status_message = "delete: canceled".to_string();
+    }
+
     pub fn close_active_popup(&mut self) {
+        if self.show_delete_confirm {
+            self.confirm_delete_no();
+            return;
+        }
         if self.show_shell_popup {
             self.close_shell_popup();
             return;
@@ -682,7 +722,11 @@ fn lookup_user_name(uid: c_uint) -> Option<String> {
         if ptr.is_null() || (*ptr).pw_name.is_null() {
             return None;
         }
-        Some(CStr::from_ptr((*ptr).pw_name).to_string_lossy().into_owned())
+        Some(
+            CStr::from_ptr((*ptr).pw_name)
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
 }
 
@@ -693,7 +737,11 @@ fn lookup_group_name(gid: c_uint) -> Option<String> {
         if ptr.is_null() || (*ptr).gr_name.is_null() {
             return None;
         }
-        Some(CStr::from_ptr((*ptr).gr_name).to_string_lossy().into_owned())
+        Some(
+            CStr::from_ptr((*ptr).gr_name)
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
 }
 
@@ -780,6 +828,8 @@ mod tests {
             show_shell_popup: false,
             help_popup_body: None,
             show_help_popup: false,
+            show_delete_confirm: false,
+            pending_delete: None,
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
@@ -852,7 +902,11 @@ mod tests {
     #[test]
     fn browse_wraps_to_bottom_when_moving_up_from_top() {
         let mut app = test_app();
-        app.entries = vec![mk_entry("..", true), mk_entry("src", true), mk_entry("README.md", false)];
+        app.entries = vec![
+            mk_entry("..", true),
+            mk_entry("src", true),
+            mk_entry("README.md", false),
+        ];
         app.selected_index = 0;
 
         app.move_selection_up();
@@ -863,7 +917,11 @@ mod tests {
     #[test]
     fn browse_wraps_to_top_when_moving_down_from_bottom() {
         let mut app = test_app();
-        app.entries = vec![mk_entry("..", true), mk_entry("src", true), mk_entry("README.md", false)];
+        app.entries = vec![
+            mk_entry("..", true),
+            mk_entry("src", true),
+            mk_entry("README.md", false),
+        ];
         app.selected_index = 2;
 
         app.move_selection_down();
@@ -1021,6 +1079,45 @@ mod tests {
         assert_eq!(app.mode, Mode::Browse);
         assert_eq!(app.status_message, "help: unexpected arguments");
         assert!(!app.show_help_popup);
+    }
+
+    #[test]
+    fn execute_selected_command_passes_args_to_cd() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_input = "cd a b".to_string();
+        app.command_candidates = vec!["cd".to_string()];
+        app.command_selected = Some(0);
+
+        app.execute_selected_command();
+
+        assert_eq!(app.status_message, "cd: too many arguments");
+    }
+
+    #[test]
+    fn execute_selected_command_passes_args_to_delete() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_input = "delete a b".to_string();
+        app.command_candidates = vec!["delete".to_string()];
+        app.command_selected = Some(0);
+
+        app.execute_selected_command();
+
+        assert_eq!(app.status_message, "delete: too many arguments");
+    }
+
+    #[test]
+    fn execute_selected_command_passes_args_to_rename() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_input = "rename a b".to_string();
+        app.command_candidates = vec!["rename".to_string()];
+        app.command_selected = Some(0);
+
+        app.execute_selected_command();
+
+        assert_eq!(app.status_message, "rename: too many arguments");
     }
 
     #[test]
