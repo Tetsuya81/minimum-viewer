@@ -57,14 +57,18 @@ pub fn filter_candidates(input: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn resolve_command(input: &str, selected: usize, candidates: &[String]) -> Option<CommandId> {
+pub fn resolve_command(
+    input: &str,
+    selected: Option<usize>,
+    candidates: &[String],
+) -> Option<CommandId> {
     let normalized = input.trim().to_lowercase();
     if !normalized.is_empty() {
         if let Some(cmd_id) = find_by_name_or_alias(&normalized) {
             return Some(cmd_id);
         }
     }
-    let candidate_name = candidates.get(selected)?;
+    let candidate_name = candidates.get(selected?)?;
     find_by_name_or_alias(candidate_name)
 }
 
@@ -112,11 +116,11 @@ mod tests {
     #[test]
     fn resolve_command_prefers_exact_input() {
         assert_eq!(
-            resolve_command("help", 0, &["quit".to_string()]),
+            resolve_command("help", None, &["quit".to_string()]),
             Some(CommandId::Help)
         );
         assert_eq!(
-            resolve_command("?", 0, &["quit".to_string()]),
+            resolve_command("?", None, &["quit".to_string()]),
             Some(CommandId::Help)
         );
     }
@@ -124,16 +128,23 @@ mod tests {
     #[test]
     fn resolve_command_falls_back_to_selected_candidate() {
         let candidates = vec!["mkdir".to_string(), "quit".to_string()];
-        assert_eq!(resolve_command("", 1, &candidates), Some(CommandId::Quit));
+        assert_eq!(resolve_command("", Some(1), &candidates), Some(CommandId::Quit));
         assert_eq!(
-            resolve_command("zzz", 0, &candidates),
+            resolve_command("zzz", Some(0), &candidates),
             Some(CommandId::Mkdir)
         );
     }
 
     #[test]
     fn resolve_command_returns_none_when_no_candidate_exists() {
-        assert_eq!(resolve_command("zzz", 0, &[]), None);
+        assert_eq!(resolve_command("zzz", Some(0), &[]), None);
+    }
+
+    #[test]
+    fn resolve_command_returns_none_when_selected_is_none_and_input_not_exact() {
+        let candidates = vec!["mkdir".to_string(), "quit".to_string()];
+        assert_eq!(resolve_command("", None, &candidates), None);
+        assert_eq!(resolve_command("zzz", None, &candidates), None);
     }
 
     #[test]

@@ -155,7 +155,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .iter()
             .enumerate()
             .map(|(i, s)| {
-                let style = if i == app.command_selected {
+                let style = if app.command_selected == Some(i) {
                     Style::default().fg(Color::Black).bg(Color::Yellow)
                 } else {
                     Style::default().fg(Color::Gray)
@@ -168,7 +168,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .highlight_style(Style::default().fg(Color::Black).bg(Color::Yellow))
             .highlight_symbol("▸ ");
         let mut cand_state = ListState::default();
-        cand_state.select(Some(app.command_selected));
+        cand_state.select(app.command_selected);
         frame.render_stateful_widget(cand_list, chunks[2], &mut cand_state);
 
         let cmd_line = format!(":{}", app.command_input);

@@ -44,7 +44,7 @@ pub struct App {
     pub filter_input: String,
     pub command_input: String,
     pub command_candidates: Vec<String>,
-    pub command_selected: usize,
+    pub command_selected: Option<usize>,
     pub shell_input: String,
     pub shell_last_output: Option<ShellResult>,
     pub show_shell_popup: bool,
@@ -76,7 +76,7 @@ impl App {
             filter_input: String::new(),
             command_input: String::new(),
             command_candidates: command::filter_candidates(""),
-            command_selected: 0,
+            command_selected: None,
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
@@ -215,8 +215,10 @@ impl App {
 
     pub fn move_selection_up(&mut self) {
         if self.mode == Mode::Command {
-            if self.command_selected > 0 {
-                self.command_selected -= 1;
+            if let Some(selected) = self.command_selected {
+                if selected > 0 {
+                    self.command_selected = Some(selected - 1);
+                }
             }
             return;
         }
@@ -232,8 +234,10 @@ impl App {
 
     pub fn move_selection_down(&mut self) {
         if self.mode == Mode::Command {
-            if self.command_selected + 1 < self.command_candidates.len() {
-                self.command_selected += 1;
+            if let Some(selected) = self.command_selected {
+                if selected + 1 < self.command_candidates.len() {
+                    self.command_selected = Some(selected + 1);
+                }
             }
             return;
         }
@@ -297,7 +301,7 @@ impl App {
         self.mode = Mode::Command;
         self.command_input.clear();
         self.filter_command_candidates();
-        self.command_selected = 0;
+        self.command_selected = None;
     }
 
     pub fn exit_command_mode(&mut self) {
@@ -307,26 +311,23 @@ impl App {
     pub fn command_push_char(&mut self, c: char) {
         self.command_input.push(c);
         self.filter_command_candidates();
-        self.command_selected = 0;
+        self.command_selected = None;
     }
 
     pub fn command_pop_char(&mut self) {
         self.command_input.pop();
         self.filter_command_candidates();
-        if self.command_selected >= self.command_candidates.len()
-            && !self.command_candidates.is_empty()
-        {
-            self.command_selected = self.command_candidates.len() - 1;
-        } else {
-            self.command_selected = 0;
-        }
+        self.command_selected = None;
     }
 
     pub fn command_select_next(&mut self) {
         if self.command_candidates.is_empty() {
             return;
         }
-        self.command_selected = (self.command_selected + 1) % self.command_candidates.len();
+        self.command_selected = Some(match self.command_selected {
+            None => 0,
+            Some(selected) => (selected + 1) % self.command_candidates.len(),
+        });
         self.sync_command_input_to_selected();
     }
 
@@ -334,17 +335,19 @@ impl App {
         if self.command_candidates.is_empty() {
             return;
         }
-        if self.command_selected == 0 {
-            self.command_selected = self.command_candidates.len() - 1;
-        } else {
-            self.command_selected -= 1;
-        }
+        self.command_selected = Some(match self.command_selected {
+            None => self.command_candidates.len() - 1,
+            Some(0) => self.command_candidates.len() - 1,
+            Some(selected) => selected - 1,
+        });
         self.sync_command_input_to_selected();
     }
 
     fn sync_command_input_to_selected(&mut self) {
-        if let Some(selected) = self.command_candidates.get(self.command_selected) {
-            self.command_input = selected.clone();
+        if let Some(selected_idx) = self.command_selected {
+            if let Some(selected) = self.command_candidates.get(selected_idx) {
+                self.command_input = selected.clone();
+            }
         }
     }
 
@@ -370,10 +373,11 @@ impl App {
         let input_cmd = self.command_input.trim().to_string();
         let (command_name, args) = self.parse_command_input();
         let cand_len = self.command_candidates.len();
-        let sel = self.command_selected;
-        let cmd_opt = self
-            .command_candidates
-            .get(self.command_selected)
+        let sel = self.command_selected
+            .map(|idx| idx.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let cmd_opt = self.command_selected
+            .and_then(|idx| self.command_candidates.get(idx))
             .map(|s| s.as_str())
             .unwrap_or("(none)");
         crate::debug_log::log(
@@ -382,11 +386,16 @@ impl App {
             BTreeMap::from([
                 ("input", input_cmd.clone()),
                 ("candidates_len", cand_len.to_string()),
-                ("command_selected", sel.to_string()),
+                ("command_selected", sel),
                 ("cmd", cmd_opt.to_string()),
             ]),
             "H3",
         );
+
+        if command_name.is_empty() && self.command_selected.is_none() {
+            self.exit_command_mode();
+            return false;
+        }
 
         let cmd = command::resolve_command(
             &command_name,
@@ -758,7 +767,7 @@ mod tests {
             filter_input: String::new(),
             command_input: String::new(),
             command_candidates: vec![],
-            command_selected: 0,
+            command_selected: None,
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
@@ -883,14 +892,14 @@ mod tests {
         let mut app = test_app();
         app.mode = Mode::Command;
         app.command_candidates = vec!["cd".to_string(), "quit".to_string(), "help".to_string()];
-        app.command_selected = 0;
+        app.command_selected = Some(0);
 
         app.move_selection_up();
-        assert_eq!(app.command_selected, 0);
+        assert_eq!(app.command_selected, Some(0));
 
-        app.command_selected = 2;
+        app.command_selected = Some(2);
         app.move_selection_down();
-        assert_eq!(app.command_selected, 2);
+        assert_eq!(app.command_selected, Some(2));
     }
 
     #[test]
@@ -898,14 +907,14 @@ mod tests {
         let mut app = test_app();
         app.mode = Mode::Command;
         app.command_candidates = vec!["cd".to_string(), "mkdir".to_string()];
-        app.command_selected = 0;
+        app.command_selected = Some(0);
 
         app.command_select_next();
-        assert_eq!(app.command_selected, 1);
+        assert_eq!(app.command_selected, Some(1));
         assert_eq!(app.command_input, "mkdir");
 
         app.command_select_next();
-        assert_eq!(app.command_selected, 0);
+        assert_eq!(app.command_selected, Some(0));
         assert_eq!(app.command_input, "cd");
     }
 
@@ -914,11 +923,65 @@ mod tests {
         let mut app = test_app();
         app.mode = Mode::Command;
         app.command_candidates = vec!["cd".to_string(), "mkdir".to_string()];
-        app.command_selected = 0;
+        app.command_selected = Some(0);
 
         app.command_select_prev();
-        assert_eq!(app.command_selected, 1);
+        assert_eq!(app.command_selected, Some(1));
         assert_eq!(app.command_input, "mkdir");
+    }
+
+    #[test]
+    fn command_mode_starts_without_selected_candidate() {
+        let mut app = test_app();
+        app.command_input = "abc".to_string();
+        app.command_selected = Some(1);
+
+        app.enter_command_mode();
+
+        assert_eq!(app.mode, Mode::Command);
+        assert!(app.command_input.is_empty());
+        assert_eq!(app.command_selected, None);
+    }
+
+    #[test]
+    fn command_select_next_starts_from_first_when_unselected() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_candidates = vec!["cd".to_string(), "mkdir".to_string()];
+        app.command_selected = None;
+
+        app.command_select_next();
+
+        assert_eq!(app.command_selected, Some(0));
+        assert_eq!(app.command_input, "cd");
+    }
+
+    #[test]
+    fn command_select_prev_starts_from_last_when_unselected() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_candidates = vec!["cd".to_string(), "mkdir".to_string()];
+        app.command_selected = None;
+
+        app.command_select_prev();
+
+        assert_eq!(app.command_selected, Some(1));
+        assert_eq!(app.command_input, "mkdir");
+    }
+
+    #[test]
+    fn execute_selected_command_with_empty_input_and_no_selection_exits_command_mode() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_input.clear();
+        app.command_selected = None;
+        app.status_message = "old".to_string();
+
+        let should_quit = app.execute_selected_command();
+
+        assert!(!should_quit);
+        assert_eq!(app.mode, Mode::Browse);
+        assert_eq!(app.status_message, "old");
     }
 
     #[test]
@@ -927,7 +990,7 @@ mod tests {
         app.mode = Mode::Command;
         app.command_input = "quit now".to_string();
         app.command_candidates = vec!["quit".to_string()];
-        app.command_selected = 0;
+        app.command_selected = Some(0);
 
         let should_quit = app.execute_selected_command();
 
@@ -942,7 +1005,7 @@ mod tests {
         app.mode = Mode::Command;
         app.command_input = "help extra".to_string();
         app.command_candidates = vec!["help".to_string()];
-        app.command_selected = 0;
+        app.command_selected = Some(0);
 
         let should_quit = app.execute_selected_command();
 

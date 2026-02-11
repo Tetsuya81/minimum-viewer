@@ -96,7 +96,7 @@ mod tests {
             filter_input: String::new(),
             command_input: String::new(),
             command_candidates: crate::command::filter_candidates(""),
-            command_selected: 0,
+            command_selected: None,
             shell_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
