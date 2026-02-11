@@ -63,6 +63,17 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                     if key.kind != KeyEventKind::Press {
                         continue;
                     }
+                    if app.show_delete_confirm {
+                        match key.code {
+                            KeyCode::Char('y') | KeyCode::Char('Y') => app.confirm_delete_yes(),
+                            KeyCode::Char('n')
+                            | KeyCode::Char('N')
+                            | KeyCode::Esc
+                            | KeyCode::Enter => app.confirm_delete_no(),
+                            _ => {}
+                        }
+                        continue;
+                    }
                     if app.show_shell_popup || app.show_help_popup {
                         match key.code {
                             KeyCode::Esc | KeyCode::Enter => app.close_active_popup(),
@@ -161,9 +172,12 @@ fn main() -> io::Result<()> {
     terminal.show_cursor()?;
 
     if let Ok(lastdir_path) = config::resolve_lastdir_path() {
-        if let Err(err) =
-            maybe_write_cd_on_quit_file(quit, app.cd_on_quit_enabled, &lastdir_path, &app.current_dir)
-        {
+        if let Err(err) = maybe_write_cd_on_quit_file(
+            quit,
+            app.cd_on_quit_enabled,
+            &lastdir_path,
+            &app.current_dir,
+        ) {
             if err.kind() != ErrorKind::NotFound {
                 eprintln!("mmv: failed to write lastdir file: {}", err);
             }
@@ -190,11 +204,15 @@ mod tests {
 
     #[test]
     fn write_cd_on_quit_file_writes_command() {
-        let root = std::env::temp_dir().join(format!("minimum-viewer-lastdir-write-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "minimum-viewer-lastdir-write-{}",
+            std::process::id()
+        ));
         let lastdir_path = root.join("nested/lastdir");
         let _ = fs::remove_dir_all(&root);
 
-        write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/work")).expect("write must succeed");
+        write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/work"))
+            .expect("write must succeed");
         let written = fs::read_to_string(&lastdir_path).expect("lastdir file must exist");
         assert_eq!(written, "cd -- '/tmp/work'\n");
 
@@ -203,8 +221,10 @@ mod tests {
 
     #[test]
     fn maybe_write_cd_on_quit_file_skips_when_disabled() {
-        let root =
-            std::env::temp_dir().join(format!("minimum-viewer-lastdir-disabled-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "minimum-viewer-lastdir-disabled-{}",
+            std::process::id()
+        ));
         let lastdir_path = root.join("lastdir");
         let _ = fs::remove_dir_all(&root);
 
@@ -217,8 +237,10 @@ mod tests {
 
     #[test]
     fn maybe_write_cd_on_quit_file_skips_when_not_quit() {
-        let root =
-            std::env::temp_dir().join(format!("minimum-viewer-lastdir-notquit-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "minimum-viewer-lastdir-notquit-{}",
+            std::process::id()
+        ));
         let lastdir_path = root.join("lastdir");
         let _ = fs::remove_dir_all(&root);
 
@@ -231,11 +253,15 @@ mod tests {
 
     #[test]
     fn write_cd_on_quit_file_escapes_single_quote() {
-        let root = std::env::temp_dir().join(format!("minimum-viewer-lastdir-quote-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "minimum-viewer-lastdir-quote-{}",
+            std::process::id()
+        ));
         let lastdir_path = root.join("lastdir");
         let _ = fs::remove_dir_all(&root);
 
-        write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/a'b")).expect("write must succeed");
+        write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/a'b"))
+            .expect("write must succeed");
         let written = fs::read_to_string(&lastdir_path).expect("lastdir file must exist");
         assert_eq!(written, "cd -- '/tmp/a'\"'\"'b'\n");
 

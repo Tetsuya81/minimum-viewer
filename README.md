@@ -50,7 +50,11 @@ make run    # nix develop -c cargo run
 - **Enter**: 選択したコマンドを実行
 - **Esc**: コマンドモードを抜ける
 - 利用可能コマンド: `quit` (`q`), `cd`, `mkdir`, `delete`, `rename`, `help` (`?`)
+- `cd` は `cd`（選択ディレクトリへ移動）または `cd <path>`（絶対/相対/`~`対応）
 - `mkdir` は `mkdir <directory_name>` のみ対応（単一トークン）
+- `delete` は `delete [path]`。引数なし時は選択中エントリを対象にする
+  - ファイル削除は即時実行、ディレクトリ削除は確認ポップアップで `y/N`
+- `rename` は `rename <new_name>`。選択中エントリ名を同一ディレクトリ内で変更
 
 ### シェルモード
 

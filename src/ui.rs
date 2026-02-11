@@ -293,6 +293,31 @@ pub fn draw(frame: &mut Frame, app: &App) {
             frame.render_widget(para, popup_area);
         }
     }
+
+    if app.show_delete_confirm {
+        let target = app
+            .pending_delete
+            .as_ref()
+            .map(|pending| pending.path.to_string_lossy().to_string())
+            .unwrap_or_else(|| "(unknown)".to_string());
+        let body = format!(
+            "Delete this directory recursively?\n\n{}\n\nPress y to confirm, n (or Esc/Enter) to cancel.",
+            target
+        );
+        let popup_area = centered_rect(70, 40, area);
+        frame.render_widget(Clear, popup_area);
+        let para = Paragraph::new(body)
+            .block(
+                Block::default()
+                    .title(Line::from(" delete confirmation "))
+                    .borders(Borders::ALL)
+                    .border_set(symbols::border::ROUNDED)
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .style(Style::default().fg(Color::Gray))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(para, popup_area);
+    }
 }
 
 fn human_size(n: u64) -> String {
@@ -316,10 +341,7 @@ fn format_status_bar(entry: &crate::app::DirEntry, content_width: u16, expanded:
         .map(human_size)
         .unwrap_or_else(|| "-".to_string());
     let modified = format_modified(entry.modified);
-    let perm = entry
-        .permissions
-        .clone()
-        .unwrap_or_else(|| "-".to_string());
+    let perm = entry.permissions.clone().unwrap_or_else(|| "-".to_string());
     let owner = entry.owner.clone().unwrap_or_else(|| "-".to_string());
     let group = entry.group.clone().unwrap_or_else(|| "-".to_string());
 

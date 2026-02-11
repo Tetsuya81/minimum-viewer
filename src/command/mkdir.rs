@@ -53,7 +53,8 @@ mod tests {
 
     #[test]
     fn mkdir_creates_directory() {
-        let base = std::env::temp_dir().join(format!("minimum-viewer-mkdir-{}", std::process::id()));
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-mkdir-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).expect("create temp dir");
 
