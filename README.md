@@ -63,4 +63,28 @@ make run    # nix develop -c cargo run
 - `MINIMUM_VIEWER_CWD`: アプリ内の現在ディレクトリ
 - 起動時とディレクトリ移動時（`Enter` / `cd`）に更新される
 - 親シェルには伝播せず、アプリプロセス内でのみ有効
+- `MINIMUM_VIEWER_CONFIG`: 設定ファイルのパスを明示する（未指定時は XDG パスを利用）
 - `EDITOR`: `e` キーバインドで利用するエディタ。未設定時はエラー表示
+
+## `cd_on_quit` を有効化する場合の shell wrapper
+
+`cd_on_quit = true` のとき、`mmv` は終了時に `cd '...'` コマンドを標準出力へ出力します。  
+親シェル側でそれを `eval` するため、`~/.zshrc` か `~/.bashrc` に次を追加してください。
+
+```bash
+mmv() {
+  local cmd
+  cmd="$(command mmv "$@")"
+  local status=$?
+  if [ $status -eq 0 ] && [ -n "$cmd" ]; then
+    eval "$cmd"
+  fi
+  return $status
+}
+```
+
+設定ファイル例（`$XDG_CONFIG_HOME/mmv/config.toml` または `~/.config/mmv/config.toml`）:
+
+```toml
+cd_on_quit = true
+```
