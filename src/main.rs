@@ -26,7 +26,7 @@ fn shell_single_quote(value: &str) -> String {
 
 fn build_cd_on_quit_command(path: &Path) -> String {
     let path_str = path.to_string_lossy();
-    format!("cd {}", shell_single_quote(path_str.as_ref()))
+    format!("cd -- {}", shell_single_quote(path_str.as_ref()))
 }
 
 fn write_cd_on_quit_file(lastdir_path: &Path, cwd: &Path) -> io::Result<()> {
@@ -196,7 +196,7 @@ mod tests {
 
         write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/work")).expect("write must succeed");
         let written = fs::read_to_string(&lastdir_path).expect("lastdir file must exist");
-        assert_eq!(written, "cd '/tmp/work'\n");
+        assert_eq!(written, "cd -- '/tmp/work'\n");
 
         let _ = fs::remove_dir_all(root);
     }
@@ -237,8 +237,20 @@ mod tests {
 
         write_cd_on_quit_file(&lastdir_path, &PathBuf::from("/tmp/a'b")).expect("write must succeed");
         let written = fs::read_to_string(&lastdir_path).expect("lastdir file must exist");
-        assert_eq!(written, "cd '/tmp/a'\"'\"'b'\n");
+        assert_eq!(written, "cd -- '/tmp/a'\"'\"'b'\n");
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn build_cd_on_quit_command_handles_single_dash_path() {
+        let command = build_cd_on_quit_command(&PathBuf::from("-"));
+        assert_eq!(command, "cd -- '-'");
+    }
+
+    #[test]
+    fn build_cd_on_quit_command_handles_leading_dash_path() {
+        let command = build_cd_on_quit_command(&PathBuf::from("-foo"));
+        assert_eq!(command, "cd -- '-foo'");
     }
 }

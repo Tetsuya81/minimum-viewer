@@ -72,7 +72,7 @@ make run    # nix develop -c cargo run
 
 ## `cd_on_quit` を有効化する場合の shell wrapper
 
-`cd_on_quit = true` のとき、`mmv` は終了時に `cd '...'` コマンドを `lastdir` ファイルへ書き込みます。  
+`cd_on_quit = true` のとき、`mmv` は終了時に `cd -- '...'` コマンドを `lastdir` ファイルへ書き込みます。  
 wrapper は `lastdir` ファイルを `. (source)` してから削除します。`~/.zshrc` か `~/.bashrc` に次を追加してください。
 
 ```bash
