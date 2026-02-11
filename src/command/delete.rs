@@ -27,7 +27,7 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
         }
     };
 
-    let meta = match std::fs::metadata(&target) {
+    let meta = match std::fs::symlink_metadata(&target) {
         Ok(meta) => meta,
         Err(err) => {
             app.status_message = format!("delete: {}: {}", target.display(), err);
@@ -60,6 +60,8 @@ fn delete_file(app: &mut App, target: &std::path::Path) -> bool {
 mod tests {
     use super::run;
     use crate::app::{App, DirEntry};
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
 
     #[test]
     fn delete_rejects_parent_entry_when_no_args() {
@@ -194,6 +196,97 @@ mod tests {
         assert!(dir.exists());
         assert!(!app.show_delete_confirm);
         assert!(app.pending_delete.is_none());
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_dangling_symlink_with_explicit_path() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-delete-dangling-explicit-{}",
+            std::process::id()
+        ));
+        let link_path = base.join("dangling-link");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        symlink(base.join("missing-target"), &link_path).expect("create dangling symlink");
+
+        let mut app = App::new();
+        app.current_dir = base.clone();
+        app.reload_entries();
+
+        run(&mut app, &["dangling-link".to_string()]);
+
+        assert!(!link_path.exists());
+        assert!(
+            std::fs::symlink_metadata(&link_path).is_err(),
+            "symlink entry should be removed"
+        );
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_dangling_symlink_without_args_uses_selected_entry() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-delete-dangling-selected-{}",
+            std::process::id()
+        ));
+        let link_path = base.join("dangling-link");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        symlink(base.join("missing-target"), &link_path).expect("create dangling symlink");
+
+        let mut app = App::new();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.selected_index = app
+            .entries
+            .iter()
+            .position(|entry| entry.name == "dangling-link")
+            .expect("dangling symlink must exist");
+
+        run(&mut app, &[]);
+
+        assert!(!link_path.exists());
+        assert!(
+            std::fs::symlink_metadata(&link_path).is_err(),
+            "symlink entry should be removed"
+        );
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_symlink_to_directory_removes_only_link() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-delete-symlink-dir-{}",
+            std::process::id()
+        ));
+        let target_dir = base.join("target-dir");
+        let link_path = base.join("dir-link");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&target_dir).expect("create target dir");
+        symlink(&target_dir, &link_path).expect("create directory symlink");
+
+        let mut app = App::new();
+        app.current_dir = base.clone();
+        app.reload_entries();
+
+        run(&mut app, &["dir-link".to_string()]);
+
+        assert!(
+            std::fs::symlink_metadata(&link_path).is_err(),
+            "symlink entry should be removed"
+        );
+        assert!(target_dir.is_dir(), "target directory must remain");
+        assert!(
+            !app.show_delete_confirm,
+            "symlink-to-dir should not open recursive delete confirmation"
+        );
 
         let _ = std::fs::remove_dir_all(base);
     }

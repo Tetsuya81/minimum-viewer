@@ -1,4 +1,5 @@
 use crate::app::App;
+use std::io::ErrorKind;
 
 pub fn run(app: &mut App, args: &[String]) -> bool {
     if args.is_empty() {
@@ -38,9 +39,16 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
         return false;
     };
     let destination = parent.join(new_name);
-    if destination.exists() {
-        app.status_message = format!("rename: '{}' already exists", new_name);
-        return false;
+    match std::fs::symlink_metadata(&destination) {
+        Ok(_) => {
+            app.status_message = format!("rename: '{}' already exists", new_name);
+            return false;
+        }
+        Err(err) if err.kind() == ErrorKind::NotFound => {}
+        Err(err) => {
+            app.status_message = format!("rename: {}: {}", destination.display(), err);
+            return false;
+        }
     }
 
     match std::fs::rename(&entry.path, &destination) {
@@ -72,6 +80,8 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
 mod tests {
     use super::run;
     use crate::app::{App, DirEntry};
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use std::path::PathBuf;
 
     #[test]
@@ -165,5 +175,39 @@ mod tests {
 
         run(&mut app, &["next".to_string()]);
         assert_eq!(app.status_message, "rename: cannot rename parent entry");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_rejects_existing_dangling_symlink_destination() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-rename-dangling-dst-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        std::fs::write(base.join("src.txt"), "x").expect("write src");
+        let dangling_dst = base.join("dst-link");
+        symlink(base.join("missing-target"), &dangling_dst).expect("create dangling symlink");
+
+        let mut app = App::new();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.selected_index = app
+            .entries
+            .iter()
+            .position(|entry| entry.name == "src.txt")
+            .expect("must have src.txt");
+
+        run(&mut app, &["dst-link".to_string()]);
+
+        assert_eq!(app.status_message, "rename: 'dst-link' already exists");
+        assert!(base.join("src.txt").exists());
+        assert!(
+            std::fs::symlink_metadata(&dangling_dst).is_ok(),
+            "existing dangling destination must remain untouched"
+        );
+
+        let _ = std::fs::remove_dir_all(base);
     }
 }
