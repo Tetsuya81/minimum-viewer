@@ -395,12 +395,42 @@ impl App {
         );
         self.exit_command_mode();
         match cmd {
-            Some(CommandId::Quit) => return command::quit::run(self),
-            Some(CommandId::Cd) => return command::cd::run(self),
+            Some(CommandId::Quit) => {
+                if !args.is_empty() {
+                    self.status_message = "quit: unexpected arguments".to_string();
+                    return false;
+                }
+                return command::quit::run(self);
+            }
+            Some(CommandId::Cd) => {
+                if !args.is_empty() {
+                    self.status_message = "cd: unexpected arguments".to_string();
+                    return false;
+                }
+                return command::cd::run(self);
+            }
             Some(CommandId::Mkdir) => return command::mkdir::run(self, &args),
-            Some(CommandId::Delete) => return command::delete::run(self),
-            Some(CommandId::Rename) => return command::rename::run(self),
-            Some(CommandId::Help) => return command::help::run(self),
+            Some(CommandId::Delete) => {
+                if !args.is_empty() {
+                    self.status_message = "delete: unexpected arguments".to_string();
+                    return false;
+                }
+                return command::delete::run(self);
+            }
+            Some(CommandId::Rename) => {
+                if !args.is_empty() {
+                    self.status_message = "rename: unexpected arguments".to_string();
+                    return false;
+                }
+                return command::rename::run(self);
+            }
+            Some(CommandId::Help) => {
+                if !args.is_empty() {
+                    self.status_message = "help: unexpected arguments".to_string();
+                    return false;
+                }
+                return command::help::run(self);
+            }
             None => self.status_message = "no matching command".to_string(),
         }
         false
@@ -889,6 +919,37 @@ mod tests {
         app.command_select_prev();
         assert_eq!(app.command_selected, 1);
         assert_eq!(app.command_input, "mkdir");
+    }
+
+    #[test]
+    fn execute_selected_command_rejects_unexpected_args_for_quit() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_input = "quit now".to_string();
+        app.command_candidates = vec!["quit".to_string()];
+        app.command_selected = 0;
+
+        let should_quit = app.execute_selected_command();
+
+        assert!(!should_quit);
+        assert_eq!(app.mode, Mode::Browse);
+        assert_eq!(app.status_message, "quit: unexpected arguments");
+    }
+
+    #[test]
+    fn execute_selected_command_rejects_unexpected_args_for_help() {
+        let mut app = test_app();
+        app.mode = Mode::Command;
+        app.command_input = "help extra".to_string();
+        app.command_candidates = vec!["help".to_string()];
+        app.command_selected = 0;
+
+        let should_quit = app.execute_selected_command();
+
+        assert!(!should_quit);
+        assert_eq!(app.mode, Mode::Browse);
+        assert_eq!(app.status_message, "help: unexpected arguments");
+        assert!(!app.show_help_popup);
     }
 
     #[test]
