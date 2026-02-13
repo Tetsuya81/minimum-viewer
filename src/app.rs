@@ -594,16 +594,37 @@ impl App {
             return;
         }
         if let Some(ent) = self.selected_entry().cloned() {
-            if ent.is_dir {
-                crate::debug_log::log(
-                    "app.rs:open_selected",
-                    "open dir",
-                    BTreeMap::from([("path", ent.path.to_string_lossy().to_string())]),
-                    "H4",
-                );
-                self.on_directory_changed(ent.path);
-            } else {
-                self.status_message = format!("File: {} (open not implemented)", ent.name);
+            match resolve_open_target(&ent.path) {
+                Ok(OpenTarget::Directory(path)) => {
+                    crate::debug_log::log(
+                        "app.rs:open_selected",
+                        "open dir",
+                        BTreeMap::from([("path", path.to_string_lossy().to_string())]),
+                        "H4",
+                    );
+                    self.on_directory_changed(path);
+                }
+                Ok(OpenTarget::File(path)) => {
+                    crate::debug_log::log(
+                        "app.rs:open_selected",
+                        "open file",
+                        BTreeMap::from([("path", path.to_string_lossy().to_string())]),
+                        "H4",
+                    );
+                    command::editor::open_path(self, &path);
+                }
+                Err(message) => {
+                    crate::debug_log::log(
+                        "app.rs:open_selected",
+                        "open failed",
+                        BTreeMap::from([
+                            ("path", ent.path.to_string_lossy().to_string()),
+                            ("error", message.clone()),
+                        ]),
+                        "H3",
+                    );
+                    self.status_message = message;
+                }
             }
         } else {
             crate::debug_log::log(
@@ -617,6 +638,46 @@ impl App {
             );
         }
     }
+}
+
+enum OpenTarget {
+    Directory(PathBuf),
+    File(PathBuf),
+}
+
+fn resolve_open_target(path: &Path) -> Result<OpenTarget, String> {
+    let link_meta =
+        fs::symlink_metadata(path).map_err(|err| format!("open: {}: {}", path.display(), err))?;
+
+    if link_meta.file_type().is_symlink() {
+        let target_meta = match fs::metadata(path) {
+            Ok(meta) => meta,
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::NotFound {
+                    return Err(format!("open: broken symlink: {}", path.display()));
+                }
+                return Err(format!("open: {}: {}", path.display(), err));
+            }
+        };
+
+        if target_meta.is_dir() {
+            let resolved =
+                fs::canonicalize(path).map_err(|err| format!("open: {}: {}", path.display(), err))?;
+            return Ok(OpenTarget::Directory(resolved));
+        }
+        if target_meta.is_file() {
+            return Ok(OpenTarget::File(path.to_path_buf()));
+        }
+        return Err(format!("open: unsupported file type: {}", path.display()));
+    }
+
+    if link_meta.is_dir() {
+        return Ok(OpenTarget::Directory(path.to_path_buf()));
+    }
+    if link_meta.is_file() {
+        return Ok(OpenTarget::File(path.to_path_buf()));
+    }
+    Err(format!("open: unsupported file type: {}", path.display()))
 }
 
 fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
@@ -796,6 +857,14 @@ unsafe extern "C" {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     fn mk_entry(name: &str, is_dir: bool) -> DirEntry {
         DirEntry {
@@ -1190,6 +1259,171 @@ mod tests {
         assert!(app.status_bar_expanded);
         app.toggle_status_bar_expanded();
         assert!(!app.status_bar_expanded);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_selected_moves_to_canonical_directory_for_symlink() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-open-dir-symlink-{}",
+            std::process::id()
+        ));
+        let target_dir = base.join("target");
+        let link_path = base.join("dir-link");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&target_dir).expect("create target dir");
+        symlink(&target_dir, &link_path).expect("create directory symlink");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.entries = vec![DirEntry {
+            name: "dir-link".to_string(),
+            path: link_path.clone(),
+            is_dir: true,
+            size: None,
+            modified: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
+        }];
+        app.selected_index = 0;
+
+        app.open_selected();
+
+        assert_eq!(
+            app.current_dir,
+            std::fs::canonicalize(&link_path).expect("canonical path")
+        );
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn open_selected_opens_regular_file_via_editor_command() {
+        let _guard = env_lock().lock().expect("env lock must be available");
+        let prev_editor = std::env::var_os("EDITOR");
+        std::env::remove_var("EDITOR");
+
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-open-file-{}", std::process::id()));
+        let file_path = base.join("sample.txt");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        std::fs::write(&file_path, "x").expect("write sample file");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.entries = vec![DirEntry {
+            name: "sample.txt".to_string(),
+            path: file_path,
+            is_dir: false,
+            size: Some(1),
+            modified: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
+        }];
+        app.selected_index = 0;
+
+        app.open_selected();
+
+        assert_eq!(app.status_message, "editor: $EDITOR is not set");
+
+        if let Some(value) = prev_editor {
+            std::env::set_var("EDITOR", value);
+        } else {
+            std::env::remove_var("EDITOR");
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_selected_opens_file_symlink_via_editor_command() {
+        let _guard = env_lock().lock().expect("env lock must be available");
+        let prev_editor = std::env::var_os("EDITOR");
+        std::env::remove_var("EDITOR");
+
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-open-file-symlink-{}",
+            std::process::id()
+        ));
+        let file_path = base.join("target.txt");
+        let link_path = base.join("file-link");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        std::fs::write(&file_path, "x").expect("write sample file");
+        symlink(&file_path, &link_path).expect("create file symlink");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.entries = vec![DirEntry {
+            name: "file-link".to_string(),
+            path: link_path,
+            is_dir: false,
+            size: None,
+            modified: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
+        }];
+        app.selected_index = 0;
+
+        app.open_selected();
+
+        assert_eq!(app.status_message, "editor: $EDITOR is not set");
+
+        if let Some(value) = prev_editor {
+            std::env::set_var("EDITOR", value);
+        } else {
+            std::env::remove_var("EDITOR");
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_selected_sets_error_for_dangling_symlink() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-open-dangling-symlink-{}",
+            std::process::id()
+        ));
+        let link_path = base.join("dangling-link");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        symlink(base.join("missing-target"), &link_path).expect("create dangling symlink");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.entries = vec![DirEntry {
+            name: "dangling-link".to_string(),
+            path: link_path.clone(),
+            is_dir: false,
+            size: None,
+            modified: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
+        }];
+        app.selected_index = 0;
+
+        app.open_selected();
+
+        assert_eq!(
+            app.status_message,
+            format!("open: broken symlink: {}", link_path.display())
+        );
+        assert_eq!(app.current_dir, base);
+
+        let _ = std::fs::remove_dir_all(app.current_dir.clone());
     }
 
     #[test]
