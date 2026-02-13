@@ -859,6 +859,12 @@ mod tests {
     use super::*;
     #[cfg(unix)]
     use std::os::unix::fs::symlink;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     fn mk_entry(name: &str, is_dir: bool) -> DirEntry {
         DirEntry {
@@ -1296,6 +1302,10 @@ mod tests {
 
     #[test]
     fn open_selected_opens_regular_file_via_editor_command() {
+        let _guard = env_lock().lock().expect("env lock must be available");
+        let prev_editor = std::env::var_os("EDITOR");
+        std::env::remove_var("EDITOR");
+
         let base =
             std::env::temp_dir().join(format!("minimum-viewer-open-file-{}", std::process::id()));
         let file_path = base.join("sample.txt");
@@ -1321,16 +1331,23 @@ mod tests {
 
         app.open_selected();
 
-        assert!(
-            app.status_message.starts_with("editor"),
-            "must route regular file open through editor path"
-        );
+        assert_eq!(app.status_message, "editor: $EDITOR is not set");
+
+        if let Some(value) = prev_editor {
+            std::env::set_var("EDITOR", value);
+        } else {
+            std::env::remove_var("EDITOR");
+        }
         let _ = std::fs::remove_dir_all(base);
     }
 
     #[cfg(unix)]
     #[test]
     fn open_selected_opens_file_symlink_via_editor_command() {
+        let _guard = env_lock().lock().expect("env lock must be available");
+        let prev_editor = std::env::var_os("EDITOR");
+        std::env::remove_var("EDITOR");
+
         let base = std::env::temp_dir().join(format!(
             "minimum-viewer-open-file-symlink-{}",
             std::process::id()
@@ -1360,10 +1377,13 @@ mod tests {
 
         app.open_selected();
 
-        assert!(
-            app.status_message.starts_with("editor"),
-            "must route file symlink open through editor path"
-        );
+        assert_eq!(app.status_message, "editor: $EDITOR is not set");
+
+        if let Some(value) = prev_editor {
+            std::env::set_var("EDITOR", value);
+        } else {
+            std::env::remove_var("EDITOR");
+        }
         let _ = std::fs::remove_dir_all(base);
     }
 
