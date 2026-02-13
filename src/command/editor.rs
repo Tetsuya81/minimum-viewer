@@ -17,13 +17,17 @@ pub fn run(app: &mut App) -> bool {
         return false;
     };
 
+    open_path(app, &target_path)
+}
+
+pub fn open_path(app: &mut App, target_path: &Path) -> bool {
     let editor = std::env::var("EDITOR").unwrap_or_default();
     if editor.trim().is_empty() {
         app.status_message = "editor: $EDITOR is not set".to_string();
         return false;
     }
 
-    match open_in_editor(&target_path) {
+    match open_in_editor(target_path) {
         Ok(Some(code)) => {
             app.status_message = format!("editor exited with code {}", code);
         }
