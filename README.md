@@ -80,19 +80,24 @@ make run    # nix develop -c cargo run
 
 ## `cd_on_quit` を有効化する場合の shell wrapper
 
-`cd_on_quit = true` のとき、`mmv` は終了時に `cd -- '...'` コマンドを `lastdir` ファイルへ書き込みます。  
-wrapper は `lastdir` ファイルを `. (source)` してから削除します。`~/.zshrc` か `~/.bashrc` に次を追加してください。
+`cd_on_quit = true` のとき、`mmv` は終了時に `cd -- '...'` コマンドを `lastdir` ファイルへ書き込みます。
+wrapper は終了コードが 0 のときだけ `lastdir` ファイルを `. (source)` してから削除します（非0終了時は親シェルのディレクトリを変更しません）。
+
+`~/.zshrc` か `~/.bashrc` に次を追加してください。
 
 ```bash
 mmv() {
   local lastdir="${MINIMUM_VIEWER_LAST_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mmv/lastdir}"
+
   command mmv "$@"
   local exit_code=$?
-  if [ $exit_code -eq 0 ] && [ -f "$lastdir" ]; then
+
+  if [ "$exit_code" -eq 0 ] && [ -f "$lastdir" ]; then
     . "$lastdir"
     rm -f "$lastdir"
   fi
-  return $exit_code
+
+  return "$exit_code"
 }
 ```
 
