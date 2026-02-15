@@ -82,11 +82,11 @@
 - `Create Insert Row`
   - 位置: `Middle`（File List Pane 内、選択中エントリの直下）
   - 画面タイトル: なし（リスト行として表示）
-  - 内容: `Icon [FileName/DirectoryName]`（`/` プレフィックスでフォルダアイコン、それ以外でファイルアイコン）
+  - 内容: `Icon <input> // / = directory, else file`（`/` プレフィックスでフォルダアイコン、それ以外でファイルアイコン）
 - `Create Help Panel`
   - 位置: `Bottom`
   - 画面タイトル: `create (n)`
-  - 内容: `n: Enter create Esc cancel  / prefix = directory`
+  - 内容: `Enter: create  Esc: cancel`
 
 ## 5. 用語対応表
 

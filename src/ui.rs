@@ -137,7 +137,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 } else {
                     app.create_input.as_str()
                 };
-                let create_line = format!("  {} [{}]", create_icon, display_name);
+                let hint = " // / = directory, else file";
+                let input_part =
+                    truncate_to_width(display_name, width.saturating_sub(hint.len() as u16 + 10));
+                let create_line = format!("  {} {}{}", create_icon, input_part, hint);
                 result.push(
                     ListItem::new(create_line)
                         .style(Style::default().fg(Color::Black).bg(Color::Yellow)),
@@ -275,7 +278,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(filter_para, chunks[2]);
     } else if app.mode == Mode::Create {
-        let status = "n: Enter create Esc cancel  / prefix = directory";
+        let status = "Enter: create  Esc: cancel";
         let block = Block::default()
             .title(Line::from(" create (n) "))
             .borders(Borders::ALL)
@@ -288,7 +291,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         frame.render_widget(para, chunks[2]);
 
         let list_inner_y = chunks[1].y + 1 + (app.selected_index + 1) as u16;
-        let prefix_len = 6;
+        let prefix_len = 8; // "▸ " (2) + "  " (2) + "📄 " (2) + " " (1) before input; 8 to fix 2-char left offset
         let cursor_x = chunks[1]
             .x
             .saturating_add(1)
