@@ -488,8 +488,8 @@ impl App {
 
     pub fn execute_create(&mut self) {
         let input = self.create_input.trim().to_string();
-        self.exit_create_mode();
         if input.is_empty() {
+            self.exit_create_mode();
             self.status_message = "create: missing name".to_string();
             return;
         }
@@ -501,11 +501,17 @@ impl App {
         };
 
         if name.is_empty() {
+            self.exit_create_mode();
             self.status_message = "create: missing name".to_string();
             return;
         }
 
         let target = PathBuf::from(&self.current_dir).join(&name);
+        if target.exists() {
+            self.status_message = format!("create: '{}' already exists", name);
+            return;
+        }
+
         let result = if is_dir {
             std::fs::create_dir(&target)
         } else {
@@ -514,6 +520,7 @@ impl App {
 
         match result {
             Ok(()) => {
+                self.exit_create_mode();
                 self.reload_entries();
                 if let Some(idx) = self.entries.iter().position(|e| e.name == name) {
                     self.selected_index = idx;
@@ -525,6 +532,7 @@ impl App {
                 );
             }
             Err(err) => {
+                self.exit_create_mode();
                 self.status_message = format!("create: {}: {}", name, err);
             }
         }
@@ -1378,6 +1386,29 @@ mod tests {
 
         assert_eq!(app.status_message, "create: missing name");
         assert_eq!(app.mode, Mode::Browse);
+    }
+
+    #[test]
+    fn execute_create_rejects_duplicate_name() {
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-create-dup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        std::fs::write(base.join("existing.txt"), "x").expect("create existing file");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.enter_create_mode();
+        app.create_input = "existing.txt".to_string();
+
+        app.execute_create();
+
+        assert!(app.status_message.contains("already exists"));
+        assert_eq!(app.mode, Mode::Create);
+        assert!(base.join("existing.txt").metadata().unwrap().len() == 1);
+
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[cfg(unix)]

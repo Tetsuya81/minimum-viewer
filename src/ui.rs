@@ -124,11 +124,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 } else {
                     "📄 "
                 };
-                let display_name = if app.create_input.trim_start().starts_with('/') {
-                    app.create_input.trim_start_matches('/').trim()
-                } else {
-                    app.create_input.as_str()
-                };
+                let display_name = app.create_input.as_str();
                 let hint = " // `/`[Folder name] or [File name]";
                 let prefix = format!("  {} ", create_icon);
                 let line_width = (width.saturating_sub(12)) as usize;
@@ -279,7 +275,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(filter_para, chunks[2]);
     } else if app.mode == Mode::Create {
-        let status = "Enter: create  Esc: cancel";
+        let status = if !app.status_message.is_empty() {
+            format!("{}\n\nEnter: create  Esc: cancel", app.status_message)
+        } else {
+            "Enter: create  Esc: cancel".to_string()
+        };
         let block = Block::default()
             .title(Line::from(" create (n) "))
             .borders(Borders::ALL)
