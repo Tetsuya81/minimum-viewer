@@ -487,6 +487,17 @@ impl App {
     }
 
     pub fn execute_create(&mut self) {
+        // #region agent log
+        crate::debug_log::log(
+            "app.rs:execute_create",
+            "entry",
+            std::collections::btree_map::BTreeMap::from([
+                ("create_input", self.create_input.clone()),
+                ("current_dir", self.current_dir.display().to_string()),
+            ]),
+            "H0",
+        );
+        // #endregion
         let input = self.create_input.trim().to_string();
         if input.is_empty() {
             self.exit_create_mode();
@@ -513,9 +524,69 @@ impl App {
         }
 
         let result = if is_dir {
-            std::fs::create_dir(&target)
+            std::fs::create_dir_all(&target)
         } else {
-            std::fs::File::create(&target).map(|_| ())
+            // #region agent log
+            let parent_opt = target.parent().map(|p| p.to_path_buf());
+            let parent_str = parent_opt
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "None".to_string());
+            crate::debug_log::log(
+                "app.rs:execute_create",
+                "file create branch",
+                std::collections::btree_map::BTreeMap::from([
+                    ("target", target.display().to_string()),
+                    ("parent", parent_str),
+                    ("current_dir", self.current_dir.display().to_string()),
+                ]),
+                "H1,H2,H4",
+            );
+            // #endregion
+            let create_dirs_result = target
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all);
+            // #region agent log
+            crate::debug_log::log(
+                "app.rs:execute_create",
+                "create_dir_all result",
+                std::collections::btree_map::BTreeMap::from([
+                    (
+                        "ok",
+                        create_dirs_result.is_ok().to_string(),
+                    ),
+                    (
+                        "err",
+                        create_dirs_result
+                            .as_ref()
+                            .err()
+                            .map(|e| e.to_string())
+                            .unwrap_or_default(),
+                    ),
+                ]),
+                "H2,H3",
+            );
+            // #endregion
+            let file_result = create_dirs_result.and_then(|_| std::fs::File::create(&target).map(|_| ()));
+            // #region agent log
+            crate::debug_log::log(
+                "app.rs:execute_create",
+                "File::create result",
+                std::collections::btree_map::BTreeMap::from([
+                    ("ok", file_result.is_ok().to_string()),
+                    (
+                        "err",
+                        file_result
+                            .as_ref()
+                            .err()
+                            .map(|e| e.to_string())
+                            .unwrap_or_default(),
+                    ),
+                ]),
+                "H3,H5",
+            );
+            // #endregion
+            file_result
         };
 
         match result {
@@ -1350,6 +1421,30 @@ mod tests {
         app.execute_create();
 
         assert!(base.join("newfile.txt").is_file());
+        assert!(app.status_message.contains("created file"));
+        assert_eq!(app.mode, Mode::Browse);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_creates_file_with_nested_path() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-create-nested-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "test99/test.md".to_string();
+
+        app.execute_create();
+
+        assert!(base.join("test99").is_dir(), "parent dir should be created");
+        assert!(base.join("test99/test.md").is_file(), "file should be created");
         assert!(app.status_message.contains("created file"));
         assert_eq!(app.mode, Mode::Browse);
 
