@@ -291,7 +291,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .wrap(Wrap { trim: false });
         frame.render_widget(para, chunks[2]);
 
-        let list_inner_y = chunks[1].y + 1 + (app.selected_index + 1) as u16;
+        let create_row_index = app.selected_index + 1;
+        let visible_row = create_row_index.saturating_sub(list_state.offset());
+        let list_inner_y = chunks[1].y + 1 + visible_row as u16;
         let prefix_len = 8; // "▸ " (2) + "  " (2) + "📄 " (2) + " " (1) before input; 8 to fix 2-char left offset
         let cursor_x = chunks[1]
             .x

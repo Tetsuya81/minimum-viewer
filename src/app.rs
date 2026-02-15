@@ -507,7 +507,7 @@ impl App {
         }
 
         let target = PathBuf::from(&self.current_dir).join(&name);
-        if target.exists() {
+        if target.symlink_metadata().is_ok() || target.metadata().is_ok() {
             self.status_message = format!("create: '{}' already exists", name);
             return;
         }
@@ -1407,6 +1407,33 @@ mod tests {
         assert!(app.status_message.contains("already exists"));
         assert_eq!(app.mode, Mode::Create);
         assert!(base.join("existing.txt").metadata().unwrap().len() == 1);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execute_create_rejects_dangling_symlink() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-create-dangling-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        let link_path = base.join("broken-link");
+        symlink("/nonexistent/target", &link_path).expect("create dangling symlink");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.enter_create_mode();
+        app.create_input = "broken-link".to_string();
+
+        app.execute_create();
+
+        assert!(app.status_message.contains("already exists"));
+        assert_eq!(app.mode, Mode::Create);
+        assert!(link_path.symlink_metadata().unwrap().is_symlink());
 
         let _ = std::fs::remove_dir_all(base);
     }
