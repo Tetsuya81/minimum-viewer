@@ -119,7 +119,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
             let line = format!("{}{}{}{}", indent, icon, name, size_str);
             result.push(ListItem::new(line).style(Style::default()));
             if i == app.selected_index {
-                let create_icon = if app.create_input.trim_start().starts_with('/') {
+                let create_icon = if app.create_input.trim_start().starts_with('/')
+                    || app.create_input.contains('/')
+                {
                     "📁 "
                 } else {
                     "📄 "

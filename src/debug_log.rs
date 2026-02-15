@@ -1,5 +1,6 @@
 // #region agent log
 use std::collections::BTreeMap;
+use std::io::Write;
 
 fn quote(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
@@ -29,6 +30,9 @@ pub fn log(location: &str, message: &str, data: BTreeMap<&str, String>, hypothes
         .create(true)
         .append(true)
         .open(&path)
-        .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+        .and_then(|mut f| {
+            std::io::Write::write_all(&mut f, line.as_bytes())?;
+            f.flush()
+        });
 }
 // #endregion
