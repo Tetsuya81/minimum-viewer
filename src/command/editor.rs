@@ -102,6 +102,7 @@ mod tests {
             command_candidates: crate::command::filter_candidates(""),
             command_selected: None,
             shell_input: String::new(),
+            create_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
             help_popup_body: None,
