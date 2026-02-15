@@ -75,6 +75,19 @@ pub struct PendingDelete {
     pub path: PathBuf,
 }
 
+fn collect_missing_ancestors(path: &Path) -> Vec<PathBuf> {
+    let mut missing = vec![];
+    let mut current = Some(path);
+    while let Some(p) = current {
+        if !p.exists() {
+            missing.push(p.to_path_buf());
+        }
+        current = p.parent();
+    }
+    missing.reverse();
+    missing
+}
+
 impl App {
     pub fn new() -> Self {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -505,8 +518,15 @@ impl App {
             return;
         }
 
-        let (name, is_dir) = if input.starts_with('/') {
-            (input.trim_start_matches('/').trim().to_string(), true)
+        let (name, is_dir) = if input.starts_with('/') || input.ends_with('/') {
+            (
+                input
+                    .trim_start_matches('/')
+                    .trim_end_matches('/')
+                    .trim()
+                    .to_string(),
+                true,
+            )
         } else {
             (input, false)
         };
@@ -526,8 +546,11 @@ impl App {
         let result = if is_dir {
             std::fs::create_dir_all(&target)
         } else {
+            let parent = target.parent();
+            let dirs_to_rollback = parent.map_or(vec![], |p| collect_missing_ancestors(p));
+
             // #region agent log
-            let parent_opt = target.parent().map(|p| p.to_path_buf());
+            let parent_opt = parent.map(|p| p.to_path_buf());
             let parent_str = parent_opt
                 .as_ref()
                 .map(|p| p.display().to_string())
@@ -543,9 +566,7 @@ impl App {
                 "H1,H2,H4",
             );
             // #endregion
-            let create_dirs_result = target
-                .parent()
-                .map_or(Ok(()), std::fs::create_dir_all);
+            let create_dirs_result = parent.map_or(Ok(()), std::fs::create_dir_all);
             // #region agent log
             crate::debug_log::log(
                 "app.rs:execute_create",
@@ -568,6 +589,11 @@ impl App {
             );
             // #endregion
             let file_result = create_dirs_result.and_then(|_| std::fs::File::create(&target).map(|_| ()));
+            if file_result.is_err() {
+                for dir in dirs_to_rollback.into_iter().rev() {
+                    let _ = std::fs::remove_dir(&dir);
+                }
+            }
             // #region agent log
             crate::debug_log::log(
                 "app.rs:execute_create",
@@ -1468,6 +1494,52 @@ mod tests {
         assert!(base.join("newdir").is_dir());
         assert!(app.status_message.contains("created directory"));
         assert_eq!(app.mode, Mode::Browse);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_creates_directory_with_trailing_slash() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-create-trailing-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "newdir/".to_string();
+
+        app.execute_create();
+
+        assert!(base.join("newdir").is_dir());
+        assert!(app.status_message.contains("created directory"));
+        assert_eq!(app.mode, Mode::Browse);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_rolls_back_on_file_create_failure() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-create-rollback-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "x/y/.".to_string();
+
+        app.execute_create();
+
+        assert!(!base.join("x").exists(), "x should be rolled back");
+        assert!(app.status_message.contains("create:"));
+        assert!(app.status_message.contains("x/y/."));
 
         let _ = std::fs::remove_dir_all(base);
     }
