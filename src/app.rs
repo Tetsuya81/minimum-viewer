@@ -516,13 +516,11 @@ impl App {
             std::fs::create_dir(&target)
         } else {
             // Auto-create parent directories if they don't exist
-            if let Some(parent) = target.parent() {
-                if !parent.exists() {
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        self.exit_create_mode();
-                        self.status_message = format!("create: {}: {}", name, e);
-                        return;
-                    }
+            if let Some(parent) = target.parent().filter(|p| !p.exists()) {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    self.exit_create_mode();
+                    self.status_message = format!("create: {}: {}", name, e);
+                    return;
                 }
             }
             std::fs::File::create(&target).map(|_| ())
