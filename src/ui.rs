@@ -67,7 +67,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             Constraint::Min(3),
             Constraint::Length(INPUT_ROWS),
         ],
-        Mode::Browse => vec![
+        Mode::Browse | Mode::Create => vec![
             Constraint::Length(3),
             Constraint::Min(3),
             Constraint::Length(if app.status_bar_expanded {
@@ -106,11 +106,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .borders(Borders::ALL)
         .border_set(symbols::border::ROUNDED)
         .border_style(Style::default().fg(Color::Cyan));
-    let items: Vec<ListItem> = app
-        .entries
-        .iter()
-        .enumerate()
-        .map(|(i, e)| {
+    let items: Vec<ListItem> = if app.mode == Mode::Create {
+        let mut result = Vec::new();
+        for (i, e) in app.entries.iter().enumerate() {
             let icon = if e.is_dir { "📁 " } else { "📄 " };
             let size_str = e
                 .size
@@ -119,18 +117,60 @@ pub fn draw(frame: &mut Frame, app: &App) {
             let indent = if e.name == ".." { "" } else { "  " };
             let name = truncate_to_width(&e.name, width.saturating_sub(8));
             let line = format!("{}{}{}{}", indent, icon, name, size_str);
-            let style =
-                if i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter) {
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD)
+            let style = if i == app.selected_index {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            result.push(ListItem::new(line).style(style));
+            if i == app.selected_index {
+                let create_icon = if app.create_input.trim_start().starts_with('/') {
+                    "📁 "
                 } else {
-                    Style::default()
+                    "📄 "
                 };
-            ListItem::new(line).style(style)
-        })
-        .collect();
+                let display_name = if app.create_input.trim_start().starts_with('/') {
+                    app.create_input.trim_start_matches('/').trim()
+                } else {
+                    app.create_input.as_str()
+                };
+                let create_line = format!("  {} [{}]", create_icon, display_name);
+                result.push(
+                    ListItem::new(create_line)
+                        .style(Style::default().fg(Color::Black).bg(Color::Yellow)),
+                );
+            }
+        }
+        result
+    } else {
+        app.entries
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                let icon = if e.is_dir { "📁 " } else { "📄 " };
+                let size_str = e
+                    .size
+                    .map(|s| format!(" {:>8}", human_size(s)))
+                    .unwrap_or_default();
+                let indent = if e.name == ".." { "" } else { "  " };
+                let name = truncate_to_width(&e.name, width.saturating_sub(8));
+                let line = format!("{}{}{}{}", indent, icon, name, size_str);
+                let style =
+                    if i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter) {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                    };
+                ListItem::new(line).style(style)
+            })
+            .collect()
+    };
     let list = List::new(items)
         .block(list_block)
         .highlight_style(
@@ -141,7 +181,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
         )
         .highlight_symbol("▸ ");
     let mut list_state = ListState::default();
-    list_state.select(Some(app.selected_index));
+    list_state.select(Some(if app.mode == Mode::Create {
+        app.selected_index + 1
+    } else {
+        app.selected_index
+    }));
     frame.render_stateful_widget(list, chunks[1], &mut list_state);
 
     if app.mode == Mode::Command {
@@ -230,6 +274,31 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .block(filter_block)
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(filter_para, chunks[2]);
+    } else if app.mode == Mode::Create {
+        let status = "n: Enter create Esc cancel  / prefix = directory";
+        let block = Block::default()
+            .title(Line::from(" create (n) "))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(Color::DarkGray));
+        let para = Paragraph::new(status)
+            .block(block)
+            .style(Style::default().fg(Color::Gray))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(para, chunks[2]);
+
+        let list_inner_y = chunks[1].y + 1 + (app.selected_index + 1) as u16;
+        let prefix_len = 6;
+        let cursor_x = chunks[1]
+            .x
+            .saturating_add(1)
+            .saturating_add(prefix_len)
+            .saturating_add(app.create_input.chars().count() as u16);
+        let max_cursor_x = chunks[1]
+            .x
+            .saturating_add(chunks[1].width)
+            .saturating_sub(2);
+        frame.set_cursor_position((cursor_x.min(max_cursor_x), list_inner_y));
     } else {
         let status = if !app.status_message.is_empty() {
             app.status_message.clone()

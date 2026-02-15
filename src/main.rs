@@ -117,8 +117,16 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char(c) => app.shell_push_char(c),
                             _ => {}
                         },
+                        Mode::Create => match key.code {
+                            KeyCode::Esc => app.exit_create_mode(),
+                            KeyCode::Enter => app.execute_create(),
+                            KeyCode::Backspace => app.create_pop_char(),
+                            KeyCode::Char(c) => app.create_push_char(c),
+                            _ => {}
+                        },
                         Mode::Browse => match key.code {
                             KeyCode::Char('q') => return Ok(true),
+                            KeyCode::Char('n') => app.enter_create_mode(),
                             KeyCode::Char(':') => app.enter_command_mode(),
                             KeyCode::Char('!') => app.enter_shell_mode(),
                             KeyCode::Char('/') => app.enter_filter_mode(),

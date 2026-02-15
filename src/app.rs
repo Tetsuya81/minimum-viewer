@@ -20,6 +20,7 @@ pub enum Mode {
     Filter,
     Command,
     Shell,
+    Create,
 }
 
 #[derive(Clone)]
@@ -47,6 +48,7 @@ pub struct App {
     pub command_candidates: Vec<String>,
     pub command_selected: Option<usize>,
     pub shell_input: String,
+    pub create_input: String,
     pub shell_last_output: Option<ShellResult>,
     pub show_shell_popup: bool,
     pub help_popup_body: Option<String>,
@@ -91,6 +93,7 @@ impl App {
             command_candidates: command::filter_candidates(""),
             command_selected: None,
             shell_input: String::new(),
+            create_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
             help_popup_body: None,
@@ -463,6 +466,68 @@ impl App {
 
     pub fn exit_shell_mode(&mut self) {
         self.mode = Mode::Browse;
+    }
+
+    pub fn enter_create_mode(&mut self) {
+        self.mode = Mode::Create;
+        self.create_input.clear();
+    }
+
+    pub fn exit_create_mode(&mut self) {
+        self.mode = Mode::Browse;
+        self.create_input.clear();
+    }
+
+    pub fn create_push_char(&mut self, c: char) {
+        self.create_input.push(c);
+    }
+
+    pub fn create_pop_char(&mut self) {
+        self.create_input.pop();
+    }
+
+    pub fn execute_create(&mut self) {
+        let input = self.create_input.trim().to_string();
+        self.exit_create_mode();
+        if input.is_empty() {
+            self.status_message = "create: missing name".to_string();
+            return;
+        }
+
+        let (name, is_dir) = if input.starts_with('/') {
+            (input.trim_start_matches('/').trim().to_string(), true)
+        } else {
+            (input, false)
+        };
+
+        if name.is_empty() {
+            self.status_message = "create: missing name".to_string();
+            return;
+        }
+
+        let target = PathBuf::from(&self.current_dir).join(&name);
+        let result = if is_dir {
+            std::fs::create_dir(&target)
+        } else {
+            std::fs::File::create(&target).map(|_| ())
+        };
+
+        match result {
+            Ok(()) => {
+                self.reload_entries();
+                if let Some(idx) = self.entries.iter().position(|e| e.name == name) {
+                    self.selected_index = idx;
+                }
+                self.status_message = format!(
+                    "create: {} '{}'",
+                    if is_dir { "created directory" } else { "created file" },
+                    name
+                );
+            }
+            Err(err) => {
+                self.status_message = format!("create: {}: {}", name, err);
+            }
+        }
     }
 
     pub fn shell_push_char(&mut self, c: char) {
@@ -893,6 +958,7 @@ mod tests {
             command_candidates: vec![],
             command_selected: None,
             shell_input: String::new(),
+            create_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
             help_popup_body: None,
@@ -1259,6 +1325,59 @@ mod tests {
         assert!(app.status_bar_expanded);
         app.toggle_status_bar_expanded();
         assert!(!app.status_bar_expanded);
+    }
+
+    #[test]
+    fn execute_create_creates_file() {
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-create-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "newfile.txt".to_string();
+
+        app.execute_create();
+
+        assert!(base.join("newfile.txt").is_file());
+        assert!(app.status_message.contains("created file"));
+        assert_eq!(app.mode, Mode::Browse);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_creates_directory_with_slash_prefix() {
+        let base =
+            std::env::temp_dir().join(format!("minimum-viewer-create-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "/newdir".to_string();
+
+        app.execute_create();
+
+        assert!(base.join("newdir").is_dir());
+        assert!(app.status_message.contains("created directory"));
+        assert_eq!(app.mode, Mode::Browse);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_rejects_empty_input() {
+        let mut app = test_app();
+        app.create_input = "   ".to_string();
+
+        app.execute_create();
+
+        assert_eq!(app.status_message, "create: missing name");
+        assert_eq!(app.mode, Mode::Browse);
     }
 
     #[cfg(unix)]

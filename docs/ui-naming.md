@@ -78,6 +78,16 @@
   - 画面タイトル: `shell`
   - 内容: 実行ヒント（`Enter: run shell command` / `Esc: cancel`）
 
+### Create
+- `Create Insert Row`
+  - 位置: `Middle`（File List Pane 内、選択中エントリの直下）
+  - 画面タイトル: なし（リスト行として表示）
+  - 内容: `Icon [FileName/DirectoryName]`（`/` プレフィックスでフォルダアイコン、それ以外でファイルアイコン）
+- `Create Help Panel`
+  - 位置: `Bottom`
+  - 画面タイトル: `create (n)`
+  - 内容: `n: Enter create Esc cancel  / prefix = directory`
+
 ## 5. 用語対応表
 
 | 正式名称 | 画面表示タイトル | コード上の描画箇所 | 表示条件 (Mode) |
@@ -91,6 +101,8 @@
 | Shell Input Bar | `shell (!): Enter run Esc cancel` | `draw(): shell_block / shell_para` | `Mode::Shell` |
 | Shell Help Panel | `shell` | `draw(): panel_block / panel_para` | `Mode::Shell` |
 | Shell Output Popup | `shell output: ... (exit ...)` | `draw(): popup_area / popup para` | `app.show_shell_popup == true` |
+| Create Insert Row | （リスト行） | `draw(): list items`（選択行直下に挿入） | `Mode::Create` |
+| Create Help Panel | `create (n)` | `draw(): block / para` (Create分岐) | `Mode::Create` |
 
 ## 6. UI改善Issue/PR テンプレート
 
@@ -100,7 +112,7 @@ Issue/PRには次の書式を使ってください。
 ## UI変更対象
 - 対象領域: <正式名称>
 - 変更内容: レイアウト / 配色 / キー挙動 / 文言
-- 影響モード: Browse / Filter / Command / Shell
+- 影響モード: Browse / Filter / Command / Shell / Create
 
 ## 受け入れ条件
 - 対象領域がこの命名ガイドで一意に参照できること
