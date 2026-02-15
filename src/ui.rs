@@ -117,15 +117,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             let indent = if e.name == ".." { "" } else { "  " };
             let name = truncate_to_width(&e.name, width.saturating_sub(8));
             let line = format!("{}{}{}{}", indent, icon, name, size_str);
-            let style = if i == app.selected_index {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-            result.push(ListItem::new(line).style(style));
+            result.push(ListItem::new(line).style(Style::default()));
             if i == app.selected_index {
                 let create_icon = if app.create_input.trim_start().starts_with('/') {
                     "📁 "
@@ -137,10 +129,19 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 } else {
                     app.create_input.as_str()
                 };
-                let hint = " // / = directory, else file";
-                let input_part =
-                    truncate_to_width(display_name, width.saturating_sub(hint.len() as u16 + 10));
-                let create_line = format!("  {} {}{}", create_icon, input_part, hint);
+                let hint = " // `/`[Folder name] or [File name]";
+                let prefix = format!("  {} ", create_icon);
+                let line_width = (width.saturating_sub(12)) as usize;
+                let hint_len = hint.chars().count();
+                let prefix_len = prefix.chars().count();
+                let available_for_input = line_width.saturating_sub(prefix_len).saturating_sub(hint_len).saturating_sub(2);
+                let input_part = truncate_to_width(display_name, available_for_input as u16);
+                let padding_len = line_width
+                    .saturating_sub(prefix_len)
+                    .saturating_sub(input_part.chars().count())
+                    .saturating_sub(hint_len);
+                let padding = " ".repeat(padding_len);
+                let create_line = format!("{}{}{}{}", prefix, input_part, padding, hint);
                 result.push(
                     ListItem::new(create_line)
                         .style(Style::default().fg(Color::Black).bg(Color::Yellow)),
