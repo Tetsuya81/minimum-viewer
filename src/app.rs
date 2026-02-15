@@ -515,6 +515,16 @@ impl App {
         let result = if is_dir {
             std::fs::create_dir(&target)
         } else {
+            // Auto-create parent directories if they don't exist
+            if let Some(parent) = target.parent() {
+                if !parent.exists() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        self.exit_create_mode();
+                        self.status_message = format!("create: {}: {}", name, e);
+                        return;
+                    }
+                }
+            }
             std::fs::File::create(&target).map(|_| ())
         };
 
@@ -1434,6 +1444,56 @@ mod tests {
         assert!(app.status_message.contains("already exists"));
         assert_eq!(app.mode, Mode::Create);
         assert!(link_path.symlink_metadata().unwrap().is_symlink());
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_auto_creates_parent_directories() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-create-nested-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "test99/test.md".to_string();
+
+        app.execute_create();
+
+        assert!(base.join("test99").is_dir());
+        assert!(base.join("test99/test.md").is_file());
+        assert!(app.status_message.contains("created file"));
+        assert_eq!(app.mode, Mode::Browse);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn execute_create_auto_creates_deeply_nested_parent_directories() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-create-deeply-nested-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.create_input = "a/b/c/file.txt".to_string();
+
+        app.execute_create();
+
+        assert!(base.join("a").is_dir());
+        assert!(base.join("a/b").is_dir());
+        assert!(base.join("a/b/c").is_dir());
+        assert!(base.join("a/b/c/file.txt").is_file());
+        assert!(app.status_message.contains("created file"));
+        assert_eq!(app.mode, Mode::Browse);
 
         let _ = std::fs::remove_dir_all(base);
     }
