@@ -2,7 +2,7 @@ use ratatui::layout::Rect;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::symbols;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 #[cfg(unix)]
@@ -12,6 +12,12 @@ use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{App, Mode};
+
+const ICON_FOLDER: &str = "\u{f07b}";
+const ICON_FILE: &str = "\u{f15b}";
+const ICON_COLOR_FOLDER: Color = Color::Yellow;
+const ICON_COLOR_FILE: Color = Color::White;
+const ICON_COLOR_SELECTED: Color = Color::Black;
 
 const MAX_PATH_WIDTH: u16 = 80;
 const CMD_CANDIDATE_ROWS: u16 = 6;
@@ -84,7 +90,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let path_width = width.saturating_sub(4).min(MAX_PATH_WIDTH);
     let path_display = truncate_to_width(
-        format!("📁 {}", app.current_dir.to_string_lossy()).as_str(),
+        format!("{} {}", ICON_FOLDER, app.current_dir.to_string_lossy()).as_str(),
         path_width,
     );
     let path_block = Block::default()
@@ -109,22 +115,27 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let items: Vec<ListItem> = if app.mode == Mode::Create {
         let mut result = Vec::new();
         for (i, e) in app.entries.iter().enumerate() {
-            let icon = if e.is_dir { "📁 " } else { "📄 " };
+            let icon_str = if e.is_dir { format!("{} ", ICON_FOLDER) } else { format!("{} ", ICON_FILE) };
+            let icon_color = if e.is_dir { ICON_COLOR_FOLDER } else { ICON_COLOR_FILE };
             let size_str = e
                 .size
                 .map(|s| format!(" {:>8}", human_size(s)))
                 .unwrap_or_default();
             let indent = if e.name == ".." { "" } else { "  " };
             let name = truncate_to_width(&e.name, width.saturating_sub(8));
-            let line = format!("{}{}{}{}", indent, icon, name, size_str);
-            result.push(ListItem::new(line).style(Style::default()));
+            let line = Line::from(vec![
+                Span::raw(indent.to_string()),
+                Span::styled(icon_str, Style::default().fg(icon_color)),
+                Span::raw(format!("{}{}", name, size_str)),
+            ]);
+            result.push(ListItem::new(line));
             if i == app.selected_index {
                 let create_icon = if app.create_input.trim_start().starts_with('/')
                     || app.create_input.contains('/')
                 {
-                    "📁 "
+                    format!("{} ", ICON_FOLDER)
                 } else {
-                    "📄 "
+                    format!("{} ", ICON_FILE)
                 };
                 let display_name = app.create_input.as_str();
                 let hint = " // `/`[Folder name] or [File name]";
@@ -152,24 +163,41 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                let icon = if e.is_dir { "📁 " } else { "📄 " };
+                let icon_str = if e.is_dir { format!("{} ", ICON_FOLDER) } else { format!("{} ", ICON_FILE) };
                 let size_str = e
                     .size
                     .map(|s| format!(" {:>8}", human_size(s)))
                     .unwrap_or_default();
                 let indent = if e.name == ".." { "" } else { "  " };
                 let name = truncate_to_width(&e.name, width.saturating_sub(8));
-                let line = format!("{}{}{}{}", indent, icon, name, size_str);
-                let style =
-                    if i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter) {
-                        Style::default()
-                            .fg(Color::Black)
-                            .bg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default()
-                    };
-                ListItem::new(line).style(style)
+
+                let is_selected = i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter);
+
+                let icon_style = if is_selected {
+                    Style::default()
+                        .fg(ICON_COLOR_SELECTED)
+                        .bg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    let icon_color = if e.is_dir { ICON_COLOR_FOLDER } else { ICON_COLOR_FILE };
+                    Style::default().fg(icon_color)
+                };
+
+                let text_style = if is_selected {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+
+                let line = Line::from(vec![
+                    Span::styled(indent.to_string(), text_style),
+                    Span::styled(icon_str, icon_style),
+                    Span::styled(format!("{}{}", name, size_str), text_style),
+                ]);
+                ListItem::new(line)
             })
             .collect()
     };
@@ -177,7 +205,6 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .block(list_block)
         .highlight_style(
             Style::default()
-                .fg(Color::Black)
                 .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )
@@ -296,7 +323,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         let create_row_index = app.selected_index + 1;
         let visible_row = create_row_index.saturating_sub(list_state.offset());
         let list_inner_y = chunks[1].y + 1 + visible_row as u16;
-        let prefix_len = 8; // "▸ " (2) + "  " (2) + "📄 " (2) + " " (1) before input; 8 to fix 2-char left offset
+        let prefix_len = 7; // "▸ " (2) + "  " (2) + "icon " (2) + offset fix
         let cursor_x = chunks[1]
             .x
             .saturating_add(1)
