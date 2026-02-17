@@ -77,6 +77,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.selected_index = 0;
 

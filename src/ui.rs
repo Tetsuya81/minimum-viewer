@@ -40,16 +40,8 @@ fn truncate_to_width(s: &str, width: u16) -> String {
         return "…".to_string();
     }
 
-    let tail_len = w - 1;
-    let tail: String = s
-        .chars()
-        .rev()
-        .take(tail_len)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    format!("…{}", tail)
+    let head: String = s.chars().take(w - 1).collect();
+    format!("{}…", head)
 }
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
@@ -118,16 +110,14 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         for (i, e) in app.entries.iter().enumerate() {
             let icon_str = if e.is_dir { format!("{} ", ICON_FOLDER) } else { format!("{} ", ICON_FILE) };
             let icon_color = if e.is_dir { ICON_COLOR_FOLDER } else { ICON_COLOR_FILE };
-            let size_str = e
-                .size
-                .map(|s| format!(" {:>8}", human_size(s)))
-                .unwrap_or_default();
             let indent = if e.name == ".." { "" } else { "  " };
-            let name = truncate_to_width(&e.name, width.saturating_sub(8));
+            let link_suffix = e.link_target.as_ref().map(|t| format!("  >>  {}", t)).unwrap_or_default();
+            let display_text = format!("{}{}", e.name, link_suffix);
+            let name = truncate_to_width(&display_text, width.saturating_sub(8));
             let line = Line::from(vec![
-                Span::raw(indent.to_string()),
+                Span::styled(indent.to_string(), Style::default().fg(Color::Gray)),
                 Span::styled(icon_str, Style::default().fg(icon_color)),
-                Span::raw(format!("{}{}", name, size_str)),
+                Span::styled(name, Style::default().fg(Color::Gray)),
             ]);
             result.push(ListItem::new(line));
             if i == app.selected_index {
@@ -165,12 +155,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             .enumerate()
             .map(|(i, e)| {
                 let icon_str = if e.is_dir { format!("{} ", ICON_FOLDER) } else { format!("{} ", ICON_FILE) };
-                let size_str = e
-                    .size
-                    .map(|s| format!(" {:>8}", human_size(s)))
-                    .unwrap_or_default();
                 let indent = if e.name == ".." { "" } else { "  " };
-                let name = truncate_to_width(&e.name, width.saturating_sub(8));
+                let link_suffix = e.link_target.as_ref().map(|t| format!("  >>  {}", t)).unwrap_or_default();
+                let display_text = format!("{}{}", e.name, link_suffix);
+                let name = truncate_to_width(&display_text, width.saturating_sub(8));
 
                 let is_selected = i == app.selected_index && matches!(app.mode, Mode::Browse | Mode::Filter);
 
@@ -190,13 +178,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                         .bg(Color::Cyan)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default()
+                    Style::default().fg(Color::Gray)
                 };
 
                 let line = Line::from(vec![
                     Span::styled(indent.to_string(), text_style),
                     Span::styled(icon_str, icon_style),
-                    Span::styled(format!("{}{}", name, size_str), text_style),
+                    Span::styled(name, text_style),
                 ]);
                 ListItem::new(line)
             })
@@ -427,6 +415,14 @@ fn human_size(n: u64) -> String {
 }
 
 fn format_status_bar(entry: &crate::app::DirEntry, content_width: u16, expanded: bool) -> String {
+    if entry.is_dangling {
+        let target = entry
+            .link_target
+            .as_deref()
+            .unwrap_or("(unknown)");
+        return format!("Broken symlink: {} >> {}", entry.name, target);
+    }
+
     let size = entry
         .size
         .map(human_size)
@@ -672,6 +668,8 @@ mod tests {
             gid: None,
             owner: Some("alice".to_string()),
             group: Some("staff".to_string()),
+            link_target: None,
+            is_dangling: false,
         };
 
         let status = format_status_bar(&entry, 80, false);
@@ -698,6 +696,8 @@ mod tests {
             gid: None,
             owner: Some("alice".to_string()),
             group: Some("staff".to_string()),
+            link_target: None,
+            is_dangling: false,
         };
 
         let status = format_status_bar(&entry, 80, true);
@@ -730,6 +730,8 @@ mod tests {
             gid: None,
             owner: Some("alice".to_string()),
             group: Some("staff".to_string()),
+            link_target: None,
+            is_dangling: false,
         };
 
         let status = format_status_bar(&entry, 30, true);
