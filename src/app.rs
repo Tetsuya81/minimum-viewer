@@ -265,6 +265,7 @@ impl App {
         if self.entries.is_empty() {
             return;
         }
+        self.status_message.clear();
         if self.selected_index == 0 {
             self.selected_index = self.entries.len() - 1;
         } else {
@@ -284,6 +285,7 @@ impl App {
         if self.entries.is_empty() {
             return;
         }
+        self.status_message.clear();
         if self.selected_index + 1 < self.entries.len() {
             self.selected_index += 1;
         } else {
