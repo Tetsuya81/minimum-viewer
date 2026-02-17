@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 use std::{fs, io::ErrorKind};
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
@@ -55,7 +55,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
             terminal.clear()?;
         }
         app.ensure_selected_owner_group_resolved();
-        terminal.draw(|f| draw(f, app))?;
+        terminal.draw(|f| draw(f, &mut *app))?;
 
         if event::poll(Duration::from_millis(100))? {
             match event::read()? {
@@ -74,7 +74,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                         }
                         continue;
                     }
-                    if app.show_shell_popup || app.show_help_popup {
+                    if app.show_shell_popup {
                         match key.code {
                             KeyCode::Esc | KeyCode::Enter => app.close_active_popup(),
                             _ => {}
@@ -124,16 +124,40 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char(c) => app.create_push_char(c),
                             _ => {}
                         },
+                        Mode::Help => match key.code {
+                            KeyCode::Esc | KeyCode::Char('q') => app.exit_help_mode(),
+                            KeyCode::Up | KeyCode::Char('k') => app.help_move_up(),
+                            KeyCode::Down | KeyCode::Char('j') => app.help_move_down(),
+                            KeyCode::Enter => {
+                                if app.execute_help_selection() {
+                                    return Ok(true);
+                                }
+                            }
+                            _ => {}
+                        },
                         Mode::Browse => match key.code {
                             KeyCode::Char('q') => return Ok(true),
                             KeyCode::Char('n') => app.enter_create_mode(),
                             KeyCode::Char(':') => app.enter_command_mode(),
                             KeyCode::Char('!') => app.enter_shell_mode(),
                             KeyCode::Char('/') => app.enter_filter_mode(),
+                            KeyCode::Char('?') => app.enter_help_mode(),
                             KeyCode::Char('e') => {
                                 command::editor::run(app);
                             }
                             KeyCode::Char('m') => app.toggle_status_bar_expanded(),
+                            KeyCode::Char('d')
+                                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                            {
+                                command::delete::run(app, &[]);
+                            }
+                            KeyCode::Char('r')
+                                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                            {
+                                app.enter_command_mode();
+                                app.command_input = "rename ".to_string();
+                                app.filter_command_candidates();
+                            }
                             KeyCode::Delete | KeyCode::Backspace => app.move_to_parent_directory(),
                             KeyCode::Enter => app.open_selected(),
                             KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),
