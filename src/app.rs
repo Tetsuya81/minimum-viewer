@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
+use ratatui::widgets::ListState;
+
 use crate::command;
 use crate::command::types::CommandId;
 use crate::config;
@@ -21,6 +23,7 @@ pub enum Mode {
     Command,
     Shell,
     Create,
+    Help,
 }
 
 #[derive(Clone)]
@@ -51,8 +54,7 @@ pub struct App {
     pub create_input: String,
     pub shell_last_output: Option<ShellResult>,
     pub show_shell_popup: bool,
-    pub help_popup_body: Option<String>,
-    pub show_help_popup: bool,
+    pub help_list_state: ListState,
     pub show_delete_confirm: bool,
     pub pending_delete: Option<PendingDelete>,
     pub needs_full_redraw: bool,
@@ -109,8 +111,7 @@ impl App {
             create_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
-            help_popup_body: None,
-            show_help_popup: false,
+            help_list_state: ListState::default(),
             show_delete_confirm: false,
             pending_delete: None,
             needs_full_redraw: false,
@@ -401,7 +402,7 @@ impl App {
         (command_name, parts)
     }
 
-    fn filter_command_candidates(&mut self) {
+    pub fn filter_command_candidates(&mut self) {
         let command_token = self.command_input.split_whitespace().next().unwrap_or("");
         self.command_candidates = command::filter_candidates(command_token);
     }
@@ -466,6 +467,33 @@ impl App {
                     return false;
                 }
                 return command::help::run(self);
+            }
+            Some(CommandId::Create) => {
+                self.enter_create_mode();
+            }
+            Some(CommandId::Command) => {
+                self.enter_command_mode();
+            }
+            Some(CommandId::Shell) => {
+                self.enter_shell_mode();
+            }
+            Some(CommandId::Filter) => {
+                self.enter_filter_mode();
+            }
+            Some(CommandId::Editor) => {
+                command::editor::run(self);
+            }
+            Some(CommandId::Status) => {
+                self.toggle_status_bar_expanded();
+            }
+            Some(CommandId::Parent) => {
+                self.move_to_parent_directory();
+            }
+            Some(CommandId::SelectUp) => {
+                self.move_selection_up();
+            }
+            Some(CommandId::SelectDown) => {
+                self.move_selection_down();
             }
             None => self.status_message = "no matching command".to_string(),
         }
@@ -686,14 +714,84 @@ impl App {
         self.shell_input.clear();
     }
 
-    pub fn open_help_popup(&mut self, body: String) {
-        self.help_popup_body = Some(body);
-        self.show_help_popup = true;
+    pub fn enter_help_mode(&mut self) {
+        self.mode = Mode::Help;
+        self.help_list_state = ListState::default();
+        self.help_list_state.select(Some(0));
     }
 
-    pub fn close_help_popup(&mut self) {
-        self.show_help_popup = false;
-        self.help_popup_body = None;
+    pub fn exit_help_mode(&mut self) {
+        self.mode = Mode::Browse;
+    }
+
+    pub fn help_move_up(&mut self) {
+        let items_len = command::help_items().len();
+        if items_len == 0 {
+            return;
+        }
+        let current = self.help_list_state.selected().unwrap_or(0);
+        let next = if current == 0 {
+            items_len - 1
+        } else {
+            current - 1
+        };
+        self.help_list_state.select(Some(next));
+    }
+
+    pub fn help_move_down(&mut self) {
+        let items_len = command::help_items().len();
+        if items_len == 0 {
+            return;
+        }
+        let current = self.help_list_state.selected().unwrap_or(0);
+        let next = if current + 1 >= items_len {
+            0
+        } else {
+            current + 1
+        };
+        self.help_list_state.select(Some(next));
+    }
+
+    pub fn execute_help_selection(&mut self) -> bool {
+        let items = command::help_items();
+        let Some(selected) = self.help_list_state.selected() else {
+            self.exit_help_mode();
+            return false;
+        };
+        let Some(item) = items.get(selected) else {
+            self.exit_help_mode();
+            return false;
+        };
+
+        if item.requires_args {
+            self.exit_help_mode();
+            self.enter_command_mode();
+            self.command_input = format!("{} ", item.command_name);
+            self.filter_command_candidates();
+            return false;
+        }
+
+        let cmd_id = item.command_id;
+        self.exit_help_mode();
+
+        match cmd_id {
+            CommandId::Quit => return command::quit::run(self),
+            CommandId::Help => self.enter_help_mode(),
+            CommandId::Delete => return command::delete::run(self, &[]),
+            CommandId::Create => self.enter_create_mode(),
+            CommandId::Command => self.enter_command_mode(),
+            CommandId::Shell => self.enter_shell_mode(),
+            CommandId::Filter => self.enter_filter_mode(),
+            CommandId::Editor => {
+                command::editor::run(self);
+            }
+            CommandId::Status => self.toggle_status_bar_expanded(),
+            CommandId::Parent => self.move_to_parent_directory(),
+            CommandId::SelectUp => self.move_selection_up(),
+            CommandId::SelectDown => self.move_selection_down(),
+            _ => {}
+        }
+        false
     }
 
     pub fn open_delete_confirm(&mut self, path: PathBuf) {
@@ -735,10 +833,6 @@ impl App {
         }
         if self.show_shell_popup {
             self.close_shell_popup();
-            return;
-        }
-        if self.show_help_popup {
-            self.close_help_popup();
         }
     }
 
@@ -1066,8 +1160,7 @@ mod tests {
             create_input: String::new(),
             shell_last_output: None,
             show_shell_popup: false,
-            help_popup_body: None,
-            show_help_popup: false,
+            help_list_state: ListState::default(),
             show_delete_confirm: false,
             pending_delete: None,
             needs_full_redraw: false,
@@ -1318,7 +1411,7 @@ mod tests {
         assert!(!should_quit);
         assert_eq!(app.mode, Mode::Browse);
         assert_eq!(app.status_message, "help: unexpected arguments");
-        assert!(!app.show_help_popup);
+        assert_ne!(app.mode, Mode::Help);
     }
 
     #[test]

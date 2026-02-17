@@ -12,6 +12,7 @@ use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{App, Mode};
+use crate::command;
 
 const ICON_FOLDER: &str = "\u{f07b}";
 const ICON_FILE: &str = "\u{f15b}";
@@ -51,7 +52,7 @@ fn truncate_to_width(s: &str, width: u16) -> String {
     format!("…{}", tail)
 }
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let width = area.width;
 
@@ -73,7 +74,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             Constraint::Min(3),
             Constraint::Length(INPUT_ROWS),
         ],
-        Mode::Browse | Mode::Create => vec![
+        Mode::Browse | Mode::Create | Mode::Help => vec![
             Constraint::Length(3),
             Constraint::Min(3),
             Constraint::Length(if app.status_bar_expanded {
@@ -380,22 +381,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         }
     }
 
-    if app.show_help_popup {
-        if let Some(body) = &app.help_popup_body {
-            let popup_area = centered_rect(70, 60, area);
-            frame.render_widget(Clear, popup_area);
-            let para = Paragraph::new(body.as_str())
-                .block(
-                    Block::default()
-                        .title(Line::from(" command help "))
-                        .borders(Borders::ALL)
-                        .border_set(symbols::border::ROUNDED)
-                        .border_style(Style::default().fg(Color::Yellow)),
-                )
-                .style(Style::default().fg(Color::Gray))
-                .wrap(Wrap { trim: false });
-            frame.render_widget(para, popup_area);
-        }
+    if app.mode == Mode::Help {
+        draw_help_screen(frame, app, area);
     }
 
     if app.show_delete_confirm {
@@ -596,6 +583,50 @@ struct Tm {
 #[cfg(unix)]
 unsafe extern "C" {
     fn localtime_r(timep: *const TimeT, result: *mut Tm) -> *mut Tm;
+}
+
+fn draw_help_screen(frame: &mut Frame, app: &mut App, area: Rect) {
+    let items = command::help_items();
+    let popup_area = centered_rect(80, 85, area);
+    frame.render_widget(Clear, popup_area);
+
+    let list_items: Vec<ListItem> = items
+        .iter()
+        .map(|item| {
+            let keys = item.keys_display.unwrap_or("");
+            let line = Line::from(vec![
+                Span::styled(
+                    format!("{:>20}  ", keys),
+                    Style::default().fg(Color::Yellow),
+                ),
+                Span::styled(
+                    format!("{:<10}  ", item.command_name),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::raw(item.description),
+            ]);
+            ListItem::new(line)
+        })
+        .collect();
+
+    let list = List::new(list_items)
+        .block(
+            Block::default()
+                .title(Line::from(
+                    " help  j/k: navigate  Enter: execute  Esc: close ",
+                ))
+                .borders(Borders::ALL)
+                .border_set(symbols::border::ROUNDED)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("\u{f0da} ");
+
+    frame.render_stateful_widget(list, popup_area, &mut app.help_list_state);
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
