@@ -976,7 +976,10 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                                     .to_string()
                             }
                         });
-                    let dangling = fs::metadata(&path).is_err();
+                    let dangling = matches!(
+                        fs::metadata(&path),
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound
+                    );
                     (target, dangling)
                 } else {
                     (None, false)
