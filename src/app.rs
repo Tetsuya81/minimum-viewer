@@ -38,6 +38,8 @@ pub struct DirEntry {
     pub gid: Option<u32>,
     pub owner: Option<String>,
     pub group: Option<String>,
+    pub link_target: Option<String>,
+    pub is_dangling: bool,
 }
 
 pub struct App {
@@ -954,6 +956,35 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 .and_then(|n| n.to_str())
                 .unwrap_or("?")
                 .to_string();
+
+            // Check if this is a symlink before following it
+            #[cfg(unix)]
+            let (link_target, is_dangling) = {
+                let link_meta = fs::symlink_metadata(&path).ok();
+                if link_meta.as_ref().is_some_and(|m| m.file_type().is_symlink()) {
+                    let target = fs::read_link(&path)
+                        .ok()
+                        .map(|t| {
+                            if t.is_absolute() {
+                                t.to_string_lossy().to_string()
+                            } else {
+                                path.parent()
+                                    .map(|p| p.join(&t))
+                                    .and_then(|abs| abs.canonicalize().ok())
+                                    .unwrap_or(t.clone())
+                                    .to_string_lossy()
+                                    .to_string()
+                            }
+                        });
+                    let dangling = fs::metadata(&path).is_err();
+                    (target, dangling)
+                } else {
+                    (None, false)
+                }
+            };
+            #[cfg(not(unix))]
+            let (link_target, is_dangling) = (None, false);
+
             let meta = e.metadata().ok();
             let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
             let size = meta
@@ -982,6 +1013,8 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 gid,
                 owner: None,
                 group: None,
+                link_target,
+                is_dangling,
             }
         })
         .collect();
@@ -1008,6 +1041,8 @@ fn read_sorted_entries(dir: &Path) -> std::io::Result<Vec<DirEntry>> {
                 gid: None,
                 owner: None,
                 group: None,
+                link_target: None,
+                is_dangling: false,
             },
         );
     }
@@ -1142,6 +1177,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }
     }
 
@@ -1724,6 +1761,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.selected_index = 0;
 
@@ -1763,6 +1802,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.selected_index = 0;
 
@@ -1809,6 +1850,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.selected_index = 0;
 
@@ -1849,6 +1892,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.selected_index = 0;
 
@@ -1931,6 +1976,8 @@ mod tests {
             gid: Some(84),
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.user_name_cache.insert(42, "cached-user".to_string());
         app.group_name_cache.insert(84, "cached-group".to_string());
@@ -1956,6 +2003,8 @@ mod tests {
             gid: Some(1),
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         app.user_name_cache.insert(1, "root".to_string());
         app.group_name_cache.insert(1, "wheel".to_string());
@@ -1994,6 +2043,8 @@ mod tests {
                 gid: Some(200),
                 owner: None,
                 group: None,
+                link_target: None,
+                is_dangling: false,
             },
             DirEntry {
                 name: "b.txt".to_string(),
@@ -2006,6 +2057,8 @@ mod tests {
                 gid: Some(200),
                 owner: None,
                 group: None,
+                link_target: None,
+                is_dangling: false,
             },
         ];
         app.user_name_cache.insert(100, "same-user".to_string());

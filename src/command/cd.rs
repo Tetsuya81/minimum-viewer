@@ -78,6 +78,8 @@ fn test_app(base: &std::path::Path) -> App {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }],
         selected_index: 0,
         filter_input: "tmp".to_string(),

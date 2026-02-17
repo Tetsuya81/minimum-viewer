@@ -144,6 +144,8 @@ mod tests {
             gid: None,
             owner: None,
             group: None,
+            link_target: None,
+            is_dangling: false,
         }];
         let should_quit = run(&mut app);
 
