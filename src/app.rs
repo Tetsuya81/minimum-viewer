@@ -684,7 +684,12 @@ impl App {
         }
 
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        match Command::new(&shell).arg("-lc").arg(&input).output() {
+        match Command::new(&shell)
+            .arg("-lc")
+            .arg(&input)
+            .current_dir(&self.current_dir)
+            .output()
+        {
             Ok(output) => {
                 let exit_code = output.status.code();
                 self.status_message = match exit_code {
