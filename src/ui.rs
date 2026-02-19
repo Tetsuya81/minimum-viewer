@@ -333,6 +333,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         };
         let block = Block::default()
             .title(Line::from(" status "))
+            .title_bottom(
+                Line::from(format!(" v{} ", env!("CARGO_PKG_VERSION"))).right_aligned(),
+            )
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
             .border_style(Style::default().fg(Color::DarkGray));
