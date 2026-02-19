@@ -5,7 +5,7 @@ name: Release-plz
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   release-plz-release:
