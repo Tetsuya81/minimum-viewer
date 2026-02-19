@@ -389,7 +389,15 @@ impl App {
     fn sync_command_input_to_selected(&mut self) {
         if let Some(selected_idx) = self.command_selected {
             if let Some(selected) = self.command_candidates.get(selected_idx) {
-                self.command_input = selected.clone();
+                if selected == "cd" {
+                    let mut dir = self.current_dir.display().to_string();
+                    if !dir.ends_with('/') {
+                        dir.push('/');
+                    }
+                    self.command_input = format!("cd {}", dir);
+                } else {
+                    self.command_input = selected.clone();
+                }
             }
         }
     }
@@ -1366,7 +1374,7 @@ mod tests {
 
         app.command_select_next();
         assert_eq!(app.command_selected, Some(0));
-        assert_eq!(app.command_input, "cd");
+        assert_eq!(app.command_input, "cd ./");
     }
 
     #[test]
@@ -1404,7 +1412,7 @@ mod tests {
         app.command_select_next();
 
         assert_eq!(app.command_selected, Some(0));
-        assert_eq!(app.command_input, "cd");
+        assert_eq!(app.command_input, "cd ./");
     }
 
     #[test]
