@@ -103,6 +103,7 @@ mod tests {
 
     #[test]
     fn cd_run_no_args_goes_to_home() {
+        let _guard = crate::command::env_lock().lock().unwrap();
         let base =
             std::env::temp_dir().join(format!("minimum-viewer-cd-home2-{}", std::process::id()));
         let home = base.join("fakehome");
@@ -146,6 +147,7 @@ mod tests {
 
     #[test]
     fn cd_run_supports_tilde_path_argument() {
+        let _guard = crate::command::env_lock().lock().unwrap();
         let root =
             std::env::temp_dir().join(format!("minimum-viewer-cd-home-{}", std::process::id()));
         let home = root.join("home");
