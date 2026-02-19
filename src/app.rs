@@ -77,6 +77,7 @@ pub struct ShellResult {
 #[derive(Clone)]
 pub struct PendingDelete {
     pub path: PathBuf,
+    pub is_dir: bool,
 }
 
 fn collect_missing_ancestors(path: &Path) -> Vec<PathBuf> {
@@ -803,8 +804,8 @@ impl App {
         false
     }
 
-    pub fn open_delete_confirm(&mut self, path: PathBuf) {
-        self.pending_delete = Some(PendingDelete { path });
+    pub fn open_delete_confirm(&mut self, path: PathBuf, is_dir: bool) {
+        self.pending_delete = Some(PendingDelete { path, is_dir });
         self.show_delete_confirm = true;
         self.status_message = "delete: confirm with y/N".to_string();
     }
@@ -815,7 +816,11 @@ impl App {
             return;
         };
 
-        let result = std::fs::remove_dir_all(&pending.path);
+        let result = if pending.is_dir {
+            std::fs::remove_dir_all(&pending.path)
+        } else {
+            std::fs::remove_file(&pending.path)
+        };
         self.show_delete_confirm = false;
         self.pending_delete = None;
         match result {

@@ -35,24 +35,7 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
         }
     };
 
-    if meta.is_dir() {
-        app.open_delete_confirm(target);
-        return false;
-    }
-
-    delete_file(app, &target)
-}
-
-fn delete_file(app: &mut App, target: &std::path::Path) -> bool {
-    match std::fs::remove_file(target) {
-        Ok(()) => {
-            app.reload_entries();
-            app.status_message = format!("delete: removed '{}'", target.display());
-        }
-        Err(err) => {
-            app.status_message = format!("delete: {}: {}", target.display(), err);
-        }
-    }
+    app.open_delete_confirm(target, meta.is_dir());
     false
 }
 
@@ -101,6 +84,13 @@ mod tests {
 
         run(&mut app, &["a.txt".to_string()]);
 
+        assert!(app.show_delete_confirm);
+        assert!(app.pending_delete.is_some());
+        assert!(!app.pending_delete.as_ref().unwrap().is_dir);
+        assert!(file.exists());
+
+        app.confirm_delete_yes();
+
         assert!(!file.exists());
         assert!(app.status_message.starts_with("delete: removed"));
 
@@ -128,6 +118,9 @@ mod tests {
             .expect("selected file must exist");
 
         run(&mut app, &[]);
+
+        assert!(app.show_delete_confirm);
+        app.confirm_delete_yes();
 
         assert!(!file.exists());
         assert!(app.status_message.starts_with("delete: removed"));
@@ -220,7 +213,10 @@ mod tests {
 
         run(&mut app, &["dangling-link".to_string()]);
 
-        assert!(!link_path.exists());
+        assert!(app.show_delete_confirm);
+        assert!(!app.pending_delete.as_ref().unwrap().is_dir);
+        app.confirm_delete_yes();
+
         assert!(
             std::fs::symlink_metadata(&link_path).is_err(),
             "symlink entry should be removed"
@@ -252,7 +248,9 @@ mod tests {
 
         run(&mut app, &[]);
 
-        assert!(!link_path.exists());
+        assert!(app.show_delete_confirm);
+        app.confirm_delete_yes();
+
         assert!(
             std::fs::symlink_metadata(&link_path).is_err(),
             "symlink entry should be removed"
@@ -281,14 +279,20 @@ mod tests {
         run(&mut app, &["dir-link".to_string()]);
 
         assert!(
+            app.show_delete_confirm,
+            "symlink-to-dir should show confirmation"
+        );
+        assert!(
+            !app.pending_delete.as_ref().unwrap().is_dir,
+            "symlink-to-dir should not be treated as directory"
+        );
+        app.confirm_delete_yes();
+
+        assert!(
             std::fs::symlink_metadata(&link_path).is_err(),
             "symlink entry should be removed"
         );
         assert!(target_dir.is_dir(), "target directory must remain");
-        assert!(
-            !app.show_delete_confirm,
-            "symlink-to-dir should not open recursive delete confirmation"
-        );
 
         let _ = std::fs::remove_dir_all(base);
     }

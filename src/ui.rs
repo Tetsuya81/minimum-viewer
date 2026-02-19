@@ -377,14 +377,19 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     if app.show_delete_confirm {
-        let target = app
-            .pending_delete
-            .as_ref()
-            .map(|pending| pending.path.to_string_lossy().to_string())
+        let pending = app.pending_delete.as_ref();
+        let target = pending
+            .map(|p| p.path.to_string_lossy().to_string())
             .unwrap_or_else(|| "(unknown)".to_string());
+        let is_dir = pending.map(|p| p.is_dir).unwrap_or(false);
+        let question = if is_dir {
+            "Delete this directory recursively?"
+        } else {
+            "Delete this file?"
+        };
         let body = format!(
-            "Delete this directory recursively?\n\n{}\n\nPress y to confirm, n (or Esc/Enter) to cancel.",
-            target
+            "{}\n\n{}\n\nPress y to confirm, n (or Esc/Enter) to cancel.",
+            question, target
         );
         let popup_area = centered_rect(70, 40, area);
         frame.render_widget(Clear, popup_area);
