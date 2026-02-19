@@ -2,7 +2,7 @@
 name: タスク
 about: 開発タスク用のIssueテンプレート
 title: "[タスク] "
-labels: task
+labels: 
 ---
 ## 背景
 - なぜこの対応が必要かを1〜3行で書く
