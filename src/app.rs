@@ -389,22 +389,35 @@ impl App {
     fn sync_command_input_to_selected(&mut self) {
         if let Some(selected_idx) = self.command_selected {
             if let Some(selected) = self.command_candidates.get(selected_idx) {
-                self.command_input = selected.clone();
+                if selected == "cd" {
+                    let mut dir = self.current_dir.display().to_string();
+                    if !dir.ends_with('/') {
+                        dir.push('/');
+                    }
+                    self.command_input = format!("cd {}", dir);
+                } else {
+                    self.command_input = selected.clone();
+                }
             }
         }
     }
 
     fn parse_command_input(&self) -> (String, Vec<String>) {
-        let mut parts = self
-            .command_input
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
-        if parts.is_empty() {
+        let trimmed = self.command_input.trim();
+        if trimmed.is_empty() {
             return (String::new(), Vec::new());
         }
-        let command_name = parts.remove(0);
-        (command_name, parts)
+        match trimmed.split_once(char::is_whitespace) {
+            Some((cmd, rest)) => {
+                let rest = rest.trim();
+                if rest.is_empty() {
+                    (cmd.to_string(), Vec::new())
+                } else {
+                    (cmd.to_string(), vec![rest.to_string()])
+                }
+            }
+            None => (trimmed.to_string(), Vec::new()),
+        }
     }
 
     pub fn filter_command_candidates(&mut self) {
@@ -1173,11 +1186,8 @@ mod tests {
     use super::*;
     #[cfg(unix)]
     use std::os::unix::fs::symlink;
-    use std::sync::{Mutex, OnceLock};
-
-    fn env_lock() -> &'static Mutex<()> {
-        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
+    fn env_lock() -> &'static std::sync::Mutex<()> {
+        crate::command::env_lock()
     }
 
     fn mk_entry(name: &str, is_dir: bool) -> DirEntry {
@@ -1366,7 +1376,7 @@ mod tests {
 
         app.command_select_next();
         assert_eq!(app.command_selected, Some(0));
-        assert_eq!(app.command_input, "cd");
+        assert_eq!(app.command_input, "cd ./");
     }
 
     #[test]
@@ -1404,7 +1414,7 @@ mod tests {
         app.command_select_next();
 
         assert_eq!(app.command_selected, Some(0));
-        assert_eq!(app.command_input, "cd");
+        assert_eq!(app.command_input, "cd ./");
     }
 
     #[test]
@@ -1476,7 +1486,8 @@ mod tests {
 
         app.execute_selected_command();
 
-        assert_eq!(app.status_message, "cd: too many arguments");
+        // "a b" is treated as a single path argument (spaces preserved)
+        assert!(app.status_message.starts_with("cd: ./a b:"));
     }
 
     #[test]
@@ -1489,7 +1500,8 @@ mod tests {
 
         app.execute_selected_command();
 
-        assert_eq!(app.status_message, "delete: too many arguments");
+        // "a b" is treated as a single path argument (spaces preserved)
+        assert!(app.status_message.starts_with("delete: ./a b:"));
     }
 
     #[test]
@@ -1502,7 +1514,8 @@ mod tests {
 
         app.execute_selected_command();
 
-        assert_eq!(app.status_message, "rename: too many arguments");
+        // "a b" is treated as a single new name (spaces preserved)
+        assert_eq!(app.status_message, "rename: no selection");
     }
 
     #[test]

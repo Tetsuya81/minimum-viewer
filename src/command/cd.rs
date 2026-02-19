@@ -11,18 +11,13 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
     }
 
     let target = if args.is_empty() {
-        let Some((path, name, is_dir)) = app
-            .selected_entry()
-            .map(|e| (e.path.clone(), e.name.clone(), e.is_dir))
-        else {
-            app.status_message = "cd: no selection".to_string();
-            return false;
-        };
-        if !is_dir {
-            app.status_message = format!("cd: '{}' is not a directory", name);
-            return false;
+        match std::env::var("HOME") {
+            Ok(home) => PathBuf::from(home),
+            Err(_) => {
+                app.status_message = "cd: HOME not set".to_string();
+                return false;
+            }
         }
-        path
     } else {
         match resolve_path(&app.current_dir, &args[0]) {
             Ok(path) => path,
@@ -104,29 +99,34 @@ fn test_app(base: &std::path::Path) -> App {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::run;
 
     #[test]
-    fn cd_run_clears_filter_after_directory_change() {
+    fn cd_run_no_args_goes_to_home() {
+        let _guard = crate::command::env_lock().lock().unwrap();
         let base =
-            std::env::temp_dir().join(format!("minimum-viewer-cd-test-{}", std::process::id()));
-        let sub = base.join("sub");
+            std::env::temp_dir().join(format!("minimum-viewer-cd-home2-{}", std::process::id()));
+        let home = base.join("fakehome");
         let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&sub).expect("create temp dirs");
+        std::fs::create_dir_all(&home).expect("create temp dirs");
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &home);
 
         let mut app = super::test_app(&base);
 
         let should_quit = run(&mut app, &[]);
 
         assert!(!should_quit);
-        assert_eq!(app.mode, crate::app::Mode::Browse);
+        assert_eq!(app.current_dir, home);
         assert!(app.filter_input.is_empty());
-        assert_eq!(app.current_dir, sub);
         assert!(app.status_message.starts_with("cd: "));
 
-        let _ = std::fs::remove_dir_all(PathBuf::from(base));
+        if let Some(value) = old_home {
+            std::env::set_var("HOME", value);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]
@@ -147,6 +147,7 @@ mod tests {
 
     #[test]
     fn cd_run_supports_tilde_path_argument() {
+        let _guard = crate::command::env_lock().lock().unwrap();
         let root =
             std::env::temp_dir().join(format!("minimum-viewer-cd-home-{}", std::process::id()));
         let home = root.join("home");

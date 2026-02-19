@@ -51,6 +51,7 @@ mod tests {
 
     #[test]
     fn resolve_path_expands_tilde() {
+        let _guard = crate::command::env_lock().lock().unwrap();
         let old_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", "/tmp/home");
         let current = Path::new("/tmp/base");

@@ -259,6 +259,13 @@ fn find_by_name_or_alias(name: &str) -> Option<CommandId> {
 }
 
 #[cfg(test)]
+pub(crate) fn env_lock() -> &'static std::sync::Mutex<()> {
+    use std::sync::{Mutex, OnceLock};
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    ENV_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
