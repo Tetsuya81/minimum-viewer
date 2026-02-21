@@ -7,6 +7,7 @@ pub mod path;
 pub mod quit;
 pub mod rename;
 pub mod types;
+pub mod yank;
 
 use types::{CommandId, CommandSpec, HelpItem, KeyBinding};
 
@@ -116,6 +117,13 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         description: "Move cursor down.",
         requires_args: false,
     },
+    CommandSpec {
+        id: CommandId::Yank,
+        name: "yank",
+        aliases: &["y"],
+        description: "Copy selected entry path to clipboard: yank [path].",
+        requires_args: false,
+    },
 ];
 
 /// Keybindings for Browse mode. Order defines Help screen display order.
@@ -171,6 +179,10 @@ pub const BROWSE_KEYBINDINGS: &[KeyBinding] = &[
     KeyBinding {
         command_id: CommandId::Rename,
         keys: "Ctrl + r",
+    },
+    KeyBinding {
+        command_id: CommandId::Yank,
+        keys: "y",
     },
 ];
 

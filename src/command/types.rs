@@ -15,6 +15,7 @@ pub enum CommandId {
     Parent,
     SelectUp,
     SelectDown,
+    Yank,
 }
 
 pub struct CommandSpec {
