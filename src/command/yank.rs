@@ -47,7 +47,9 @@ fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
     #[cfg(not(target_os = "macos"))]
     {
         if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-            return run_clipboard_tool("wl-copy", &[], text);
+            if run_clipboard_tool("wl-copy", &[], text).is_ok() {
+                return Ok(());
+            }
         }
         if run_clipboard_tool("xclip", &["-selection", "clipboard"], text).is_ok() {
             return Ok(());
