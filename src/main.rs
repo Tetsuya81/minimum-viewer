@@ -146,6 +146,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                                 command::editor::run(app);
                             }
                             KeyCode::Char('m') => app.toggle_status_bar_expanded(),
+                            KeyCode::Char('y') => {
+                                command::yank::run(app, &[]);
+                            }
                             KeyCode::Char('d')
                                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
                             {
