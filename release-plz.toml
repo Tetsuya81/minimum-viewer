@@ -4,4 +4,9 @@
 
 [workspace]
 publish = false
+git_only = true
 git_release_enable = true
+
+[[package]]
+name = "minimum-viewer"
+git_only = true
