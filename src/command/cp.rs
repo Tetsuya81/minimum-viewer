@@ -3,12 +3,19 @@ use crate::command::path::resolve_path;
 use std::path::{Path, PathBuf};
 
 pub fn run(app: &mut App, args: &[String]) -> bool {
-    if args.len() > 2 {
+    // parse_command_input passes the entire argument string as a single element.
+    // Split it here to support `cp <src> <dest>`.
+    let parsed_args: Vec<String> = args
+        .iter()
+        .flat_map(|a| a.split_whitespace().map(String::from))
+        .collect();
+
+    if parsed_args.len() > 2 {
         app.status_message = "cp: too many arguments".to_string();
         return false;
     }
 
-    let (src, dest) = match args.len() {
+    let (src, dest) = match parsed_args.len() {
         0 => {
             let Some(entry) = app.selected_entry().cloned() else {
                 app.status_message = "cp: no selection".to_string();
@@ -22,7 +29,7 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
             (entry.path, dest)
         }
         1 => {
-            let src = match resolve_path(&app.current_dir, &args[0]) {
+            let src = match resolve_path(&app.current_dir, &parsed_args[0]) {
                 Ok(path) => path,
                 Err(err) => {
                     app.status_message = format!("cp: {}", err);
@@ -39,8 +46,7 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
             let dest_candidate = app.current_dir.join(file_name);
             let dest = if dest_candidate == src {
                 generate_copy_name(&src)
-            } else if dest_candidate.exists() || std::fs::symlink_metadata(&dest_candidate).is_ok()
-            {
+            } else if std::fs::symlink_metadata(&dest_candidate).is_ok() {
                 generate_copy_name(&dest_candidate)
             } else {
                 dest_candidate
@@ -48,14 +54,14 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
             (src, dest)
         }
         2 => {
-            let src = match resolve_path(&app.current_dir, &args[0]) {
+            let src = match resolve_path(&app.current_dir, &parsed_args[0]) {
                 Ok(path) => path,
                 Err(err) => {
                     app.status_message = format!("cp: {}", err);
                     return false;
                 }
             };
-            let dest = match resolve_path(&app.current_dir, &args[1]) {
+            let dest = match resolve_path(&app.current_dir, &parsed_args[1]) {
                 Ok(path) => path,
                 Err(err) => {
                     app.status_message = format!("cp: {}", err);
@@ -125,14 +131,35 @@ fn generate_copy_name(path: &Path) -> PathBuf {
 fn copy_entry(src: &Path, dest: &Path) -> std::io::Result<()> {
     let meta = std::fs::symlink_metadata(src)?;
 
+    if meta.is_dir() {
+        let src_canonical = std::fs::canonicalize(src)?;
+        let dest_abs = if dest.is_absolute() {
+            dest.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(dest)
+        };
+        let dest_check = if let Some(parent) = dest_abs.parent() {
+            std::fs::canonicalize(parent)?.join(dest_abs.file_name().unwrap_or_default())
+        } else {
+            dest_abs
+        };
+        if dest_check.starts_with(&src_canonical) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("cannot copy '{}' into itself", src.display()),
+            ));
+        }
+    }
+
     if meta.is_symlink() {
         let target = std::fs::read_link(src)?;
         #[cfg(unix)]
         std::os::unix::fs::symlink(&target, dest)?;
         #[cfg(not(unix))]
         {
-            // On non-Unix, fall back to copying the target
-            if meta.is_dir() {
+            // On non-Unix, fall back to copying the resolved target
+            let resolved_meta = std::fs::metadata(src)?;
+            if resolved_meta.is_dir() {
                 copy_dir_recursive(src, dest)?;
             } else {
                 std::fs::copy(src, dest)?;
@@ -422,6 +449,36 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(base.join("file(1).txt")).unwrap(),
             "content"
+        );
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn cp_rejects_copy_into_self() {
+        let base = temp_dir("into-self");
+        let _ = std::fs::remove_dir_all(&base);
+        let src_dir = base.join("mydir");
+        std::fs::create_dir_all(&src_dir).expect("create src dir");
+        std::fs::write(src_dir.join("a.txt"), "aaa").expect("write a");
+
+        let mut app = App::new();
+        app.current_dir = base.clone();
+        app.reload_entries();
+
+        // Try to copy mydir into mydir/copy (dest is inside src)
+        run(
+            &mut app,
+            &[
+                src_dir.display().to_string(),
+                src_dir.join("copy").display().to_string(),
+            ],
+        );
+
+        assert!(
+            app.status_message.contains("cannot copy"),
+            "expected 'cannot copy' error, got: {}",
+            app.status_message
         );
 
         let _ = std::fs::remove_dir_all(base);
