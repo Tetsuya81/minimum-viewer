@@ -482,6 +482,9 @@ impl App {
             Some(CommandId::Yank) => {
                 return command::yank::run(self, &args);
             }
+            Some(CommandId::Cp) => {
+                return command::cp::run(self, &args);
+            }
             Some(CommandId::Help) => {
                 if !args.is_empty() {
                     self.status_message = "help: unexpected arguments".to_string();
@@ -806,6 +809,9 @@ impl App {
             CommandId::Delete => return command::delete::run(self, &[]),
             CommandId::Yank => {
                 command::yank::run(self, &[]);
+            }
+            CommandId::Cp => {
+                command::cp::run(self, &[]);
             }
             CommandId::Create => self.enter_create_mode(),
             CommandId::Command => self.enter_command_mode(),
