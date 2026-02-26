@@ -161,6 +161,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                                 app.command_input = "rename ".to_string();
                                 app.filter_command_candidates();
                             }
+                            KeyCode::Char('c')
+                                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                            {
+                                command::cp::run(app, &[]);
+                            }
                             KeyCode::Delete | KeyCode::Backspace => app.move_to_parent_directory(),
                             KeyCode::Enter => app.open_selected(),
                             KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),

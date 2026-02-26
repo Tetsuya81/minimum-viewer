@@ -1,4 +1,5 @@
 pub mod cd;
+pub mod cp;
 pub mod delete;
 pub mod editor;
 pub mod help;
@@ -124,6 +125,13 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         description: "Copy selected entry path to clipboard: yank [path].",
         requires_args: false,
     },
+    CommandSpec {
+        id: CommandId::Cp,
+        name: "cp",
+        aliases: &[],
+        description: "Copy file/dir: cp [src] [dest].",
+        requires_args: false,
+    },
 ];
 
 /// Keybindings for Browse mode. Order defines Help screen display order.
@@ -183,6 +191,10 @@ pub const BROWSE_KEYBINDINGS: &[KeyBinding] = &[
     KeyBinding {
         command_id: CommandId::Yank,
         keys: "y",
+    },
+    KeyBinding {
+        command_id: CommandId::Cp,
+        keys: "Ctrl + c",
     },
 ];
 
@@ -298,7 +310,7 @@ mod tests {
 
     #[test]
     fn filter_candidates_matches_prefix_case_insensitive() {
-        assert_eq!(filter_candidates("C"), vec!["cd"]);
+        assert_eq!(filter_candidates("C"), vec!["cd", "cp"]);
         assert_eq!(filter_candidates("HE"), vec!["help"]);
     }
 
