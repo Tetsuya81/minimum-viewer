@@ -395,6 +395,16 @@ impl App {
                         dir.push('/');
                     }
                     self.command_input = format!("cd {}", dir);
+                } else if selected == "cp" {
+                    if let Some(entry) = self.selected_entry().cloned() {
+                        if entry.name == ".." {
+                            self.command_input = "cp ".to_string();
+                        } else {
+                            self.command_input = format!("cp {} ", entry.path.display());
+                        }
+                    } else {
+                        self.command_input = "cp ".to_string();
+                    }
                 } else {
                     self.command_input = selected.clone();
                 }
@@ -481,6 +491,9 @@ impl App {
             }
             Some(CommandId::Yank) => {
                 return command::yank::run(self, &args);
+            }
+            Some(CommandId::Cp) => {
+                return command::cp::run(self, &args);
             }
             Some(CommandId::Help) => {
                 if !args.is_empty() {
@@ -806,6 +819,9 @@ impl App {
             CommandId::Delete => return command::delete::run(self, &[]),
             CommandId::Yank => {
                 command::yank::run(self, &[]);
+            }
+            CommandId::Cp => {
+                command::cp::run(self, &[]);
             }
             CommandId::Create => self.enter_create_mode(),
             CommandId::Command => self.enter_command_mode(),
@@ -2107,5 +2123,60 @@ mod tests {
         assert_eq!(app.entries[0].group.as_deref(), Some("same-group"));
         assert_eq!(app.entries[1].owner.as_deref(), Some("same-user"));
         assert_eq!(app.entries[1].group.as_deref(), Some("same-group"));
+    }
+
+    #[test]
+    fn sync_command_input_prefills_cp_with_selected_entry_path() {
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-cp-prefill-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create base dir");
+        std::fs::write(base.join("test.txt"), "x").expect("write file");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.selected_index = app
+            .entries
+            .iter()
+            .position(|e| e.name == "test.txt")
+            .expect("must have test.txt");
+
+        app.command_candidates = vec!["cp".to_string()];
+        app.command_selected = Some(0);
+        app.sync_command_input_to_selected();
+
+        let expected = format!("cp {} ", base.join("test.txt").display());
+        assert_eq!(app.command_input, expected);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn sync_command_input_cp_with_parent_entry() {
+        let mut app = test_app();
+        app.entries = vec![DirEntry {
+            name: "..".to_string(),
+            path: app.current_dir.clone(),
+            is_dir: true,
+            size: None,
+            modified: None,
+            permissions: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
+            link_target: None,
+            is_dangling: false,
+        }];
+        app.selected_index = 0;
+
+        app.command_candidates = vec!["cp".to_string()];
+        app.command_selected = Some(0);
+        app.sync_command_input_to_selected();
+
+        assert_eq!(app.command_input, "cp ");
     }
 }
