@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 
 const CONFIG_RELATIVE_PATH: &str = "mmv/config.toml";
 const STATE_LASTDIR_RELATIVE_PATH: &str = "mmv/lastdir";
-const DEFAULT_CONFIG_CONTENT: &str = "cd_on_quit = false\n";
+const DEFAULT_CONFIG_CONTENT: &str = "cd_on_quit = false\nmarkdown_viewer = \"treemd\"\n";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub cd_on_quit: bool,
+    pub markdown_viewer: String,
 }
 
 pub fn load_or_create() -> Result<Config, String> {
@@ -94,6 +95,7 @@ fn ensure_exists_with_default(path: &Path) -> std::io::Result<()> {
 
 fn parse_config(content: &str) -> Result<Config, String> {
     let mut cd_on_quit = false;
+    let mut markdown_viewer = "treemd".to_string();
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -104,19 +106,27 @@ fn parse_config(content: &str) -> Result<Config, String> {
             return Err(format!("invalid config line: {}", trimmed));
         };
 
-        if key.trim() != "cd_on_quit" {
-            continue;
-        }
-
         let value = raw_value.split('#').next().unwrap_or_default().trim();
-        match value {
-            "true" => cd_on_quit = true,
-            "false" => cd_on_quit = false,
-            _ => return Err(format!("cd_on_quit must be true or false, got '{}'", value)),
+        match key.trim() {
+            "cd_on_quit" => match value {
+                "true" => cd_on_quit = true,
+                "false" => cd_on_quit = false,
+                _ => return Err(format!("cd_on_quit must be true or false, got '{}'", value)),
+            },
+            "markdown_viewer" => {
+                let unquoted = value.trim_matches('"');
+                if !unquoted.is_empty() {
+                    markdown_viewer = unquoted.to_string();
+                }
+            }
+            _ => {}
         }
     }
 
-    Ok(Config { cd_on_quit })
+    Ok(Config {
+        cd_on_quit,
+        markdown_viewer,
+    })
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ pub mod cp;
 pub mod delete;
 pub mod editor;
 pub mod help;
+pub mod markdown;
 pub mod mkdir;
 pub mod path;
 pub mod quit;
@@ -88,6 +89,13 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         name: "editor",
         aliases: &[],
         description: "Open file in $EDITOR.",
+        requires_args: false,
+    },
+    CommandSpec {
+        id: CommandId::Markdown,
+        name: "markdown",
+        aliases: &["md"],
+        description: "Open selected file in markdown viewer.",
         requires_args: false,
     },
     CommandSpec {
@@ -195,6 +203,10 @@ pub const BROWSE_KEYBINDINGS: &[KeyBinding] = &[
     KeyBinding {
         command_id: CommandId::Cp,
         keys: "Ctrl + c",
+    },
+    KeyBinding {
+        command_id: CommandId::Markdown,
+        keys: "M",
     },
 ];
 

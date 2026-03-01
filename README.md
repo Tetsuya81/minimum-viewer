@@ -33,6 +33,7 @@ make run    # nix develop -c cargo run
 - **e**: 選択中のファイル/ディレクトリを `$EDITOR` で開く
 - **n**: ファイル/ディレクトリを新規作成（名前入力。先頭に `/` でディレクトリ）
 - **m**: Browse の `Status Bar` を展開/折りたたみ（詳細メタデータの表示切替）
+- **M** (Shift+m): 選択中のファイルを Markdown viewer で開く（デフォルト: `treemd`、`config.toml` で変更可能）
 - **q**: 終了
 - シンボリックリンクを `Enter` した場合は参照先に対して処理される
   - ディレクトリリンク: 参照先ディレクトリ（実体パス）に移動
@@ -54,7 +55,7 @@ make run    # nix develop -c cargo run
 - **Tab / Shift+Tab**: 候補選択（前後循環）
 - **Enter**: 選択したコマンドを実行
 - **Esc**: コマンドモードを抜ける
-- 利用可能コマンド: `quit` (`q`), `cd`, `mkdir`, `delete`, `rename`, `help` (`?`)
+- 利用可能コマンド: `quit` (`q`), `cd`, `mkdir`, `delete`, `rename`, `help` (`?`), `markdown` (`md`)
 - `cd` は `cd`（選択ディレクトリへ移動）または `cd <path>`（絶対/相対/`~`対応）
 - `mkdir` は `mkdir <directory_name>` のみ対応（単一トークン）
 - `delete` は `delete [path]`。引数なし時は選択中エントリを対象にする
@@ -115,4 +116,5 @@ mmv() {
 
 ```toml
 cd_on_quit = true
+markdown_viewer = "treemd"
 ```
