@@ -145,6 +145,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                             KeyCode::Char('e') => {
                                 command::editor::run(app);
                             }
+                            KeyCode::Char('M') => {
+                                command::markdown::run(app);
+                            }
                             KeyCode::Char('m') => app.toggle_status_bar_expanded(),
                             KeyCode::Char('y') => {
                                 command::yank::run(app, &[]);
@@ -214,7 +217,7 @@ fn main() -> io::Result<()> {
     if let Ok(lastdir_path) = config::resolve_lastdir_path() {
         if let Err(err) = maybe_write_cd_on_quit_file(
             quit,
-            app.cd_on_quit_enabled,
+            app.config.cd_on_quit,
             &lastdir_path,
             &app.current_dir,
         ) {
@@ -222,7 +225,7 @@ fn main() -> io::Result<()> {
                 eprintln!("mmv: failed to write lastdir file: {}", err);
             }
         }
-    } else if quit && app.cd_on_quit_enabled {
+    } else if quit && app.config.cd_on_quit {
         eprintln!("mmv: failed to resolve lastdir path");
     }
 

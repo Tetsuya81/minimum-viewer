@@ -91,7 +91,10 @@ fn test_app(base: &std::path::Path) -> App {
         needs_full_redraw: false,
         status_bar_expanded: false,
         status_message: String::new(),
-        cd_on_quit_enabled: false,
+        config: crate::config::Config {
+            cd_on_quit: false,
+            markdown_viewer: "treemd".to_string(),
+        },
         user_name_cache: std::collections::HashMap::new(),
         group_name_cache: std::collections::HashMap::new(),
     }

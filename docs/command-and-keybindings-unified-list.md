@@ -136,6 +136,7 @@
 | filter | / | フィルタモードへ。 |
 | create | n | 作成モードへ。 |
 | toggle_status | m | ステータスバー詳細の切り替え。 |
+| markdown | M | 選択中のファイルを Markdown viewer で開く。 |
 
 ---
 

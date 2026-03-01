@@ -62,7 +62,7 @@ pub struct App {
     pub needs_full_redraw: bool,
     pub status_bar_expanded: bool,
     pub status_message: String,
-    pub cd_on_quit_enabled: bool,
+    pub config: config::Config,
     pub user_name_cache: HashMap<u32, String>,
     pub group_name_cache: HashMap<u32, String>,
 }
@@ -96,9 +96,15 @@ fn collect_missing_ancestors(path: &Path) -> Vec<PathBuf> {
 impl App {
     pub fn new() -> Self {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let (cd_on_quit_enabled, config_error_message) = match config::load_or_create() {
-            Ok(cfg) => (cfg.cd_on_quit, None),
-            Err(err) => (false, Some(format!("config: {}", err))),
+        let (config, config_error_message) = match config::load_or_create() {
+            Ok(cfg) => (cfg, None),
+            Err(err) => (
+                config::Config {
+                    cd_on_quit: false,
+                    markdown_viewer: "treemd".to_string(),
+                },
+                Some(format!("config: {}", err)),
+            ),
         };
         let mut app = Self {
             mode: Mode::Browse,
@@ -120,7 +126,7 @@ impl App {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: config_error_message.unwrap_or_default(),
-            cd_on_quit_enabled,
+            config,
             user_name_cache: HashMap::new(),
             group_name_cache: HashMap::new(),
         };
@@ -517,6 +523,9 @@ impl App {
             Some(CommandId::Editor) => {
                 command::editor::run(self);
             }
+            Some(CommandId::Markdown) => {
+                command::markdown::run(self);
+            }
             Some(CommandId::Status) => {
                 self.toggle_status_bar_expanded();
             }
@@ -829,6 +838,9 @@ impl App {
             CommandId::Filter => self.enter_filter_mode(),
             CommandId::Editor => {
                 command::editor::run(self);
+            }
+            CommandId::Markdown => {
+                command::markdown::run(self);
             }
             CommandId::Status => self.toggle_status_bar_expanded(),
             CommandId::Parent => self.move_to_parent_directory(),
@@ -1250,7 +1262,10 @@ mod tests {
             needs_full_redraw: false,
             status_bar_expanded: false,
             status_message: String::new(),
-            cd_on_quit_enabled: false,
+            config: config::Config {
+                cd_on_quit: false,
+                markdown_viewer: "treemd".to_string(),
+            },
             user_name_cache: HashMap::new(),
             group_name_cache: HashMap::new(),
         }
