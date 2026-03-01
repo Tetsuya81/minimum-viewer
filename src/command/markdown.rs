@@ -1,5 +1,5 @@
 use std::io::{self, stdout};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crossterm::terminal::{
@@ -12,10 +12,15 @@ use crate::app::App;
 const MARKDOWN_SHELL_SNIPPET: &str = "${MARKDOWN_VIEWER} \"${TARGET_PATH}\"";
 
 pub fn run(app: &mut App) -> bool {
-    let Some(target_path) = selected_path(app) else {
+    let Some(entry) = app.selected_entry() else {
         app.status_message = "markdown: no selection".to_string();
         return false;
     };
+    if entry.is_dir {
+        app.status_message = "Please select the file you want to display".to_string();
+        return false;
+    }
+    let target_path = entry.path.clone();
 
     let viewer = &app.config.markdown_viewer;
     if viewer.trim().is_empty() {
@@ -37,10 +42,6 @@ pub fn run(app: &mut App) -> bool {
     app.request_full_redraw();
 
     false
-}
-
-fn selected_path(app: &App) -> Option<PathBuf> {
-    app.selected_entry().map(|entry| entry.path.clone())
 }
 
 fn open_in_viewer(viewer: &str, target_path: &Path) -> io::Result<Option<i32>> {
@@ -88,6 +89,7 @@ fn resume_tui() -> io::Result<()> {
 mod tests {
     use super::*;
     use std::ffi::OsString;
+    use std::path::PathBuf;
 
     #[test]
     fn build_viewer_command_uses_shell_snippet_and_envs() {
@@ -211,5 +213,53 @@ mod tests {
         let should_quit = run(&mut app);
         assert!(!should_quit);
         assert_eq!(app.status_message, "markdown: viewer is not configured");
+    }
+
+    #[test]
+    fn run_sets_error_when_directory_selected() {
+        let mut app = crate::app::App {
+            mode: crate::app::Mode::Browse,
+            current_dir: PathBuf::from("."),
+            all_entries: vec![],
+            entries: vec![crate::app::DirEntry {
+                name: "src".to_string(),
+                path: PathBuf::from("src"),
+                is_dir: true,
+                size: None,
+                modified: None,
+                permissions: None,
+                uid: None,
+                gid: None,
+                owner: None,
+                group: None,
+                link_target: None,
+                is_dangling: false,
+            }],
+            selected_index: 0,
+            filter_input: String::new(),
+            command_input: String::new(),
+            command_candidates: crate::command::filter_candidates(""),
+            command_selected: None,
+            shell_input: String::new(),
+            create_input: String::new(),
+            shell_last_output: None,
+            show_shell_popup: false,
+            help_list_state: ratatui::widgets::ListState::default(),
+            show_delete_confirm: false,
+            pending_delete: None,
+            needs_full_redraw: false,
+            status_bar_expanded: false,
+            status_message: String::new(),
+            config: crate::config::Config {
+                cd_on_quit: false,
+                markdown_viewer: "treemd".to_string(),
+            },
+            user_name_cache: std::collections::HashMap::new(),
+            group_name_cache: std::collections::HashMap::new(),
+        };
+
+        let should_quit = run(&mut app);
+        assert!(!should_quit);
+        assert_eq!(app.status_message, "Please select the file you want to display");
     }
 }
