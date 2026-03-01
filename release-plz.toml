@@ -6,6 +6,7 @@
 publish = false
 git_only = true
 git_release_enable = true
+semver_check = false
 
 [[package]]
 name = "minimum-viewer"
