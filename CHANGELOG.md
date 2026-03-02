@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/Tetsuya81/minimum-viewer/compare/v0.1.4...v0.1.5) - 2026-03-02
+
+### Fixed
+
+- eliminate SHELL env var race condition in markdown/editor tests
+
 ## [0.1.4](https://github.com/Tetsuya81/minimum-viewer/compare/v0.1.3...v0.1.4) - 2026-03-02
 
 ### Fixed
