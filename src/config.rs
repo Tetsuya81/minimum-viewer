@@ -13,14 +13,17 @@ pub struct Config {
 }
 
 pub fn load_or_create() -> Result<Config, String> {
-    let path = resolve_config_path()?;
+    load_or_create_from(|name| std::env::var_os(name))
+}
+
+fn load_or_create_from<F>(get_env: F) -> Result<Config, String>
+where
+    F: Fn(&str) -> Option<OsString>,
+{
+    let path = resolve_config_path_from(&get_env)?;
     ensure_exists_with_default(&path).map_err(|err| err.to_string())?;
     let content = fs::read_to_string(&path).map_err(|err| err.to_string())?;
     parse_config(&content)
-}
-
-pub fn resolve_config_path() -> Result<PathBuf, String> {
-    resolve_config_path_from(|name| std::env::var_os(name))
 }
 
 pub fn resolve_lastdir_path() -> Result<PathBuf, String> {
@@ -178,17 +181,19 @@ mod tests {
         let config_path = root.join("config.toml");
         let _ = fs::remove_dir_all(&root);
 
-        std::env::set_var("MINIMUM_VIEWER_CONFIG", &config_path);
-        std::env::remove_var("XDG_CONFIG_HOME");
+        let path = config_path.clone();
+        let config = load_or_create_from(move |name| match name {
+            "MINIMUM_VIEWER_CONFIG" => Some(path.as_os_str().to_owned()),
+            _ => None,
+        })
+        .expect("load must succeed");
 
-        let config = load_or_create().expect("load must succeed");
         assert!(!config.cd_on_quit);
         assert_eq!(
             fs::read_to_string(&config_path).expect("config content must exist"),
             DEFAULT_CONFIG_CONTENT
         );
 
-        std::env::remove_var("MINIMUM_VIEWER_CONFIG");
         let _ = fs::remove_dir_all(root);
     }
 
@@ -201,13 +206,15 @@ mod tests {
         fs::create_dir_all(&root).expect("create temp dir");
         fs::write(&config_path, "cd_on_quit = true\n").expect("write config");
 
-        std::env::set_var("MINIMUM_VIEWER_CONFIG", &config_path);
-        std::env::remove_var("XDG_CONFIG_HOME");
+        let path = config_path.clone();
+        let config = load_or_create_from(move |name| match name {
+            "MINIMUM_VIEWER_CONFIG" => Some(path.as_os_str().to_owned()),
+            _ => None,
+        })
+        .expect("load must succeed");
 
-        let config = load_or_create().expect("load must succeed");
         assert!(config.cd_on_quit);
 
-        std::env::remove_var("MINIMUM_VIEWER_CONFIG");
         let _ = fs::remove_dir_all(root);
     }
 
