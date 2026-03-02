@@ -46,7 +46,8 @@ pub fn run(app: &mut App) -> bool {
 
 fn open_in_viewer(viewer: &str, target_path: &Path) -> io::Result<Option<i32>> {
     suspend_tui()?;
-    let status_result = build_viewer_command(viewer, target_path).status();
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let status_result = build_viewer_command(&shell, viewer, target_path).status();
     let restore_result = resume_tui();
 
     match (status_result, restore_result) {
@@ -63,8 +64,7 @@ fn open_in_viewer(viewer: &str, target_path: &Path) -> io::Result<Option<i32>> {
     }
 }
 
-fn build_viewer_command(viewer: &str, target_path: &Path) -> Command {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+fn build_viewer_command(shell: &str, viewer: &str, target_path: &Path) -> Command {
     let mut command = Command::new(shell);
     command
         .arg("-lc")
@@ -93,11 +93,8 @@ mod tests {
 
     #[test]
     fn build_viewer_command_uses_shell_snippet_and_envs() {
-        let prev_shell = std::env::var_os("SHELL");
-        std::env::set_var("SHELL", "/bin/test-shell");
-
         let target = PathBuf::from("/tmp/README.md");
-        let command = build_viewer_command("treemd", &target);
+        let command = build_viewer_command("/bin/test-shell", "treemd", &target);
 
         assert_eq!(command.get_program(), "/bin/test-shell");
         assert_eq!(
@@ -122,12 +119,6 @@ mod tests {
             .find(|(key, _)| *key == "TARGET_PATH")
             .and_then(|(_, value)| value.map(|v| v.to_os_string()));
         assert_eq!(path_env, Some(OsString::from("/tmp/README.md")));
-
-        if let Some(shell) = prev_shell {
-            std::env::set_var("SHELL", shell);
-        } else {
-            std::env::remove_var("SHELL");
-        }
     }
 
     #[test]

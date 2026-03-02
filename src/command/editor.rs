@@ -49,7 +49,8 @@ fn selected_path(app: &App) -> Option<PathBuf> {
 
 fn open_in_editor(target_path: &Path) -> io::Result<Option<i32>> {
     suspend_tui()?;
-    let status_result = build_editor_command(target_path).status();
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let status_result = build_editor_command(&shell, target_path).status();
     let restore_result = resume_tui();
 
     match (status_result, restore_result) {
@@ -63,8 +64,7 @@ fn open_in_editor(target_path: &Path) -> io::Result<Option<i32>> {
     }
 }
 
-fn build_editor_command(target_path: &Path) -> Command {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+fn build_editor_command(shell: &str, target_path: &Path) -> Command {
     let mut command = Command::new(shell);
     command
         .arg("-lc")
@@ -158,11 +158,8 @@ mod tests {
 
     #[test]
     fn build_editor_command_uses_shell_snippet_and_target_path_env() {
-        let prev_shell = std::env::var_os("SHELL");
-        std::env::set_var("SHELL", "/bin/test-shell");
-
         let target = PathBuf::from("/tmp/sample.txt");
-        let command = build_editor_command(&target);
+        let command = build_editor_command("/bin/test-shell", &target);
 
         assert_eq!(command.get_program(), "/bin/test-shell");
         assert_eq!(
@@ -178,11 +175,5 @@ mod tests {
             .find(|(key, _)| *key == "TARGET_PATH")
             .and_then(|(_, value)| value.map(|v| v.to_os_string()));
         assert_eq!(target_env, Some(OsString::from("/tmp/sample.txt")));
-
-        if let Some(shell) = prev_shell {
-            std::env::set_var("SHELL", shell);
-        } else {
-            std::env::remove_var("SHELL");
-        }
     }
 }
