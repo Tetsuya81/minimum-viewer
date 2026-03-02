@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  runner:
+    image: myoung34/github-runner:latest   # 自動でarm64/x64判別
+    container_name: minimum-viewer-github-runner
+    # restart: unless-stopped                # Mac再起動後も自動起動
+    env_file:
+      - .env
+    volumes:
+      - runner-work:/home/runner/_work     # ワークスペース永続化（任意だがおすすめ）
+    # privileged: true                    # Docker-in-Dockerが必要なら追加（通常不要）
+
+volumes:
+  runner-work:
