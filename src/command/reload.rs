@@ -29,8 +29,10 @@ pub fn run(app: &mut App, args: &[String]) -> bool {
         }
     }
 
-    let refreshed = app.entries.iter().filter(|entry| entry.name != "..").count();
-    app.status_message = format!("reload: refreshed {} entries", refreshed);
+    if !app.status_message.starts_with("Error:") {
+        let refreshed = app.entries.iter().filter(|entry| entry.name != "..").count();
+        app.status_message = format!("reload: refreshed {} entries", refreshed);
+    }
     false
 }
 
@@ -139,5 +141,22 @@ mod tests {
         assert!(!app.entries.iter().any(|entry| entry.name == "beta.txt"));
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn reload_preserves_error_when_directory_unreadable() {
+        let base = unique_temp_dir("reload-error");
+        // Point at a directory that does not exist
+        let missing = base.join("does-not-exist");
+
+        let mut app = App::new();
+        app.current_dir = missing;
+        run(&mut app, &[]);
+
+        assert!(
+            app.status_message.starts_with("Error:"),
+            "expected error status but got: {}",
+            app.status_message
+        );
     }
 }
