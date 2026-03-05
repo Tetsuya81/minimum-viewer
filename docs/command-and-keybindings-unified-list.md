@@ -35,6 +35,7 @@
 | mkdir | — | ディレクトリを作成: mkdir &lt;name&gt;。 | command |
 | delete | — | ファイル/ディレクトリを削除: delete [path]。 | command |
 | rename | — | 選択エントリをリネーム: rename &lt;new_name&gt;。 | command |
+| reload | — | 現在ディレクトリ一覧を再読み込みする。 | command |
 
 ---
 
