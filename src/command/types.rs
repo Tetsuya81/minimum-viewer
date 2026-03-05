@@ -5,6 +5,7 @@ pub enum CommandId {
     Mkdir,
     Delete,
     Rename,
+    Reload,
     Help,
     Create,
     Command,

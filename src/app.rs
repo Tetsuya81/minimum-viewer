@@ -495,6 +495,9 @@ impl App {
             Some(CommandId::Rename) => {
                 return command::rename::run(self, &args);
             }
+            Some(CommandId::Reload) => {
+                return command::reload::run(self, &args);
+            }
             Some(CommandId::Yank) => {
                 return command::yank::run(self, &args);
             }
@@ -826,6 +829,9 @@ impl App {
             CommandId::Quit => return command::quit::run(self),
             CommandId::Help => self.enter_help_mode(),
             CommandId::Delete => return command::delete::run(self, &[]),
+            CommandId::Reload => {
+                command::reload::run(self, &[]);
+            }
             CommandId::Yank => {
                 command::yank::run(self, &[]);
             }
@@ -1553,6 +1559,73 @@ mod tests {
 
         // "a b" is treated as a single new name (spaces preserved)
         assert_eq!(app.status_message, "rename: no selection");
+    }
+
+    #[test]
+    fn execute_selected_command_runs_reload() {
+        let nanos = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time must be after unix epoch")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-reload-command-{}-{}",
+            std::process::id(),
+            nanos
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+
+        std::fs::write(base.join("new.txt"), "new").expect("create file");
+        app.mode = Mode::Command;
+        app.command_input = "reload".to_string();
+        app.command_candidates = vec!["reload".to_string()];
+        app.command_selected = Some(0);
+
+        app.execute_selected_command();
+
+        assert!(app.entries.iter().any(|entry| entry.name == "new.txt"));
+        assert!(app.status_message.starts_with("reload: refreshed "));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn execute_help_selection_runs_reload() {
+        let nanos = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time must be after unix epoch")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "minimum-viewer-reload-help-{}-{}",
+            std::process::id(),
+            nanos
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("create temp dir");
+
+        let mut app = test_app();
+        app.current_dir = base.clone();
+        app.reload_entries();
+        app.enter_help_mode();
+        let items = crate::command::help_items();
+        let reload_idx = items
+            .iter()
+            .position(|item| item.command_id == CommandId::Reload)
+            .expect("reload item must exist");
+        app.help_list_state.select(Some(reload_idx));
+        std::fs::write(base.join("new.txt"), "new").expect("create file");
+
+        app.execute_help_selection();
+
+        assert_eq!(app.mode, Mode::Browse);
+        assert!(app.entries.iter().any(|entry| entry.name == "new.txt"));
+        assert!(app.status_message.starts_with("reload: refreshed "));
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

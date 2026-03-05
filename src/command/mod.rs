@@ -7,6 +7,7 @@ pub mod markdown;
 pub mod mkdir;
 pub mod path;
 pub mod quit;
+pub mod reload;
 pub mod rename;
 pub mod types;
 pub mod yank;
@@ -48,6 +49,13 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         aliases: &[],
         description: "Rename selected entry: rename <new_name>.",
         requires_args: true,
+    },
+    CommandSpec {
+        id: CommandId::Reload,
+        name: "reload",
+        aliases: &[],
+        description: "Reload current directory entries.",
+        requires_args: false,
     },
     CommandSpec {
         id: CommandId::Help,
@@ -313,6 +321,7 @@ mod tests {
         assert!(list.contains(&"mkdir".to_string()));
         assert!(list.contains(&"delete".to_string()));
         assert!(list.contains(&"rename".to_string()));
+        assert!(list.contains(&"reload".to_string()));
         assert!(list.contains(&"help".to_string()));
         // Navigation-only commands should be excluded
         assert!(!list.contains(&"up".to_string()));
@@ -331,6 +340,10 @@ mod tests {
         assert_eq!(
             resolve_command("help", None, &["quit".to_string()]),
             Some(CommandId::Help)
+        );
+        assert_eq!(
+            resolve_command("reload", None, &["quit".to_string()]),
+            Some(CommandId::Reload)
         );
         assert_eq!(
             resolve_command("?", None, &["quit".to_string()]),
