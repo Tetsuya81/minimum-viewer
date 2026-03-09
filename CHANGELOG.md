@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/Tetsuya81/minimum-viewer/compare/v0.1.6...v0.1.7) - 2026-03-09
+
+### Added
+
+- add OSC 52 fallback for yank over SSH on Linux
+
 ## [0.1.6](https://github.com/Tetsuya81/minimum-viewer/compare/v0.1.5...v0.1.6) - 2026-03-05
 
 ### Added
