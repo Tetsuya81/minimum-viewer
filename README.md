@@ -55,12 +55,17 @@ make run    # nix develop -c cargo run
 - **Tab / Shift+Tab**: 候補選択（前後循環）
 - **Enter**: 選択したコマンドを実行
 - **Esc**: コマンドモードを抜ける
-- 利用可能コマンド: `quit` (`q`), `cd`, `mkdir`, `delete`, `rename`, `help` (`?`), `markdown` (`md`)
+- 利用可能コマンド: `quit` (`q`), `cd`, `mkdir`, `delete`, `rename`, `yank` (`y`), `help` (`?`), `markdown` (`md`)
 - `cd` は `cd`（選択ディレクトリへ移動）または `cd <path>`（絶対/相対/`~`対応）
 - `mkdir` は `mkdir <directory_name>` のみ対応（単一トークン）
 - `delete` は `delete [path]`。引数なし時は選択中エントリを対象にする
   - ファイル削除は即時実行、ディレクトリ削除は確認ポップアップで `y/N`
 - `rename` は `rename <new_name>`。選択中エントリ名を同一ディレクトリ内で変更
+- `yank` は `yank [path]`。選択中エントリ（または指定パス）をクリップボードへコピー
+  - macOS: `pbcopy` を使用
+  - Linux: `wl-copy` / `xclip` / `xsel` を順に試みる
+  - SSH セッション上でこれらが使えない場合は OSC 52 エスケープシーケンスでローカル端末へ転送
+  - OSC 52 を使うには接続元ターミナルの設定が必要（tmux では `set -g set-clipboard on` 等）
 
 ### 作成モード（`n`）
 

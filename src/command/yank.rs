@@ -54,8 +54,62 @@ fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
         if run_clipboard_tool("xclip", &["-selection", "clipboard"], text).is_ok() {
             return Ok(());
         }
-        run_clipboard_tool("xsel", &["--clipboard", "--input"], text)
+        if run_clipboard_tool("xsel", &["--clipboard", "--input"], text).is_ok() {
+            return Ok(());
+        }
+        if is_ssh_session() {
+            return copy_via_osc52(text);
+        }
+        Err("clipboard unavailable")
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_ssh_session() -> bool {
+    is_ssh_session_with_env(|k| std::env::var_os(k))
+}
+
+fn is_ssh_session_with_env<F>(get_env: F) -> bool
+where
+    F: for<'a> Fn(&'a str) -> Option<std::ffi::OsString>,
+{
+    get_env("SSH_CONNECTION").is_some()
+        || get_env("SSH_CLIENT").is_some()
+        || get_env("SSH_TTY").is_some()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn copy_via_osc52(text: &str) -> Result<(), &'static str> {
+    let encoded = base64_encode(text.as_bytes());
+    let seq = format!("\x1b]52;c;{}\x07", encoded);
+    std::io::stdout()
+        .write_all(seq.as_bytes())
+        .map_err(|_| "osc52: write failed")
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[((n >> 18) & 0x3f) as usize] as char);
+        out.push(TABLE[((n >> 12) & 0x3f) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[((n >> 6) & 0x3f) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[(n & 0x3f) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
 }
 
 fn run_clipboard_tool(program: &str, args: &[&str], text: &str) -> Result<(), &'static str> {
@@ -110,6 +164,45 @@ mod tests {
     fn clipboard_tool_unavailable_returns_error() {
         let result = run_clipboard_tool("definitely-not-a-real-clipboard-tool-xyz", &[], "test");
         assert_eq!(result, Err("clipboard unavailable"));
+    }
+
+    #[test]
+    fn base64_encode_basic() {
+        assert_eq!(base64_encode(b"Hello"), "SGVsbG8=");
+        assert_eq!(base64_encode(b"Hello, World!"), "SGVsbG8sIFdvcmxkIQ==");
+        assert_eq!(base64_encode(b""), "");
+    }
+
+    #[test]
+    fn osc52_encodes_path_correctly() {
+        let encoded = base64_encode(b"/tmp/foo");
+        assert_eq!(encoded, "L3RtcC9mb28=");
+    }
+
+    #[test]
+    fn ssh_detection_no_vars_returns_false() {
+        assert!(!is_ssh_session_with_env(|_| None));
+    }
+
+    #[test]
+    fn ssh_detection_uses_ssh_connection() {
+        assert!(is_ssh_session_with_env(|k| {
+            if k == "SSH_CONNECTION" { Some("10.0.0.1 12345 10.0.0.2 22".into()) } else { None }
+        }));
+    }
+
+    #[test]
+    fn ssh_detection_falls_back_to_ssh_client() {
+        assert!(is_ssh_session_with_env(|k| {
+            if k == "SSH_CLIENT" { Some("10.0.0.1 12345 22".into()) } else { None }
+        }));
+    }
+
+    #[test]
+    fn ssh_detection_falls_back_to_ssh_tty() {
+        assert!(is_ssh_session_with_env(|k| {
+            if k == "SSH_TTY" { Some("/dev/pts/0".into()) } else { None }
+        }));
     }
 
     #[cfg(target_os = "macos")]
