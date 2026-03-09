@@ -69,6 +69,7 @@ fn is_ssh_session() -> bool {
     is_ssh_session_with_env(|k| std::env::var_os(k))
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 fn is_ssh_session_with_env<F>(get_env: F) -> bool
 where
     F: for<'a> Fn(&'a str) -> Option<std::ffi::OsString>,
@@ -87,6 +88,7 @@ fn copy_via_osc52(text: &str) -> Result<(), &'static str> {
         .map_err(|_| "osc52: write failed")
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 fn base64_encode(data: &[u8]) -> String {
     const TABLE: &[u8; 64] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
