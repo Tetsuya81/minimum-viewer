@@ -1,4 +1,4 @@
-.PHONY: test build run install
+.PHONY: test build run
 
 test:
 	nix develop -c cargo test
@@ -8,6 +8,3 @@ build:
 
 run:
 	nix develop -c cargo run
-
-install:
-	nix develop -c cargo install --locked --path . --root $(HOME)/.local
