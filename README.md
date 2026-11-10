@@ -94,8 +94,9 @@ make run    # nix develop -c cargo run
 
 `XDG_CONFIG_HOME` は `config.toml` の配置にのみ使い、`lastdir` には使いません。
 
-## `cd_on_quit` を有効化する場合の shell wrapper
+## `cd_on_quit` 用の shell wrapper
 
+`cd_on_quit` はデフォルトで `true` です（無効化するには `cd_on_quit = false`）。
 `cd_on_quit = true` のとき、`mmv` は終了時に `cd -- '...'` コマンドを `lastdir` ファイルへ書き込みます。
 wrapper は終了コードが 0 のときだけ `lastdir` ファイルを `. (source)` してから削除します（非0終了時は親シェルのディレクトリを変更しません）。
 

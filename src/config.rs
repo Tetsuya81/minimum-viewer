@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 const CONFIG_RELATIVE_PATH: &str = "mmv/config.toml";
 const STATE_LASTDIR_RELATIVE_PATH: &str = "mmv/lastdir";
-const DEFAULT_CONFIG_CONTENT: &str = "cd_on_quit = false\nmarkdown_viewer = \"treemd\"\n";
+const DEFAULT_CONFIG_CONTENT: &str = "cd_on_quit = true\nmarkdown_viewer = \"treemd\"\n";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
@@ -97,7 +97,7 @@ fn ensure_exists_with_default(path: &Path) -> std::io::Result<()> {
 }
 
 fn parse_config(content: &str) -> Result<Config, String> {
-    let mut cd_on_quit = false;
+    let mut cd_on_quit = true;
     let mut markdown_viewer = "treemd".to_string();
     for line in content.lines() {
         let trimmed = line.trim();
@@ -188,7 +188,7 @@ mod tests {
         })
         .expect("load must succeed");
 
-        assert!(!config.cd_on_quit);
+        assert!(config.cd_on_quit);
         assert_eq!(
             fs::read_to_string(&config_path).expect("config content must exist"),
             DEFAULT_CONFIG_CONTENT
@@ -216,6 +216,18 @@ mod tests {
         assert!(config.cd_on_quit);
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn parse_config_defaults_cd_on_quit_to_true_when_missing() {
+        let config = parse_config("markdown_viewer = \"treemd\"\n").expect("parse must succeed");
+        assert!(config.cd_on_quit);
+    }
+
+    #[test]
+    fn parse_config_reads_false_value() {
+        let config = parse_config("cd_on_quit = false\n").expect("parse must succeed");
+        assert!(!config.cd_on_quit);
     }
 
     #[test]
