@@ -46,22 +46,29 @@ fn copy_to_clipboard(text: &str) -> Result<(), &'static str> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-            if run_clipboard_tool("wl-copy", &[], text).is_ok() {
+        let has_wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
+        for (program, args) in linux_clipboard_tools(has_wayland) {
+            if run_clipboard_tool(program, args, text).is_ok() {
                 return Ok(());
             }
-        }
-        if run_clipboard_tool("xclip", &["-selection", "clipboard"], text).is_ok() {
-            return Ok(());
-        }
-        if run_clipboard_tool("xsel", &["--clipboard", "--input"], text).is_ok() {
-            return Ok(());
         }
         if is_ssh_session() {
             return copy_via_osc52(text);
         }
         Err("clipboard unavailable")
     }
+}
+
+#[cfg(any(not(target_os = "macos"), test))]
+fn linux_clipboard_tools(has_wayland: bool) -> Vec<(&'static str, &'static [&'static str])> {
+    let mut tools: Vec<(&'static str, &'static [&'static str])> = Vec::new();
+    if has_wayland {
+        tools.push(("wl-copy", &[]));
+    }
+    tools.push(("xclip", &["-selection", "clipboard"]));
+    tools.push(("xsel", &["--clipboard", "--input"]));
+    tools.push(("pbcopy", &[]));
+    tools
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -166,6 +173,18 @@ mod tests {
     fn clipboard_tool_unavailable_returns_error() {
         let result = run_clipboard_tool("definitely-not-a-real-clipboard-tool-xyz", &[], "test");
         assert_eq!(result, Err("clipboard unavailable"));
+    }
+
+    #[test]
+    fn linux_tools_try_wl_copy_first_only_with_wayland() {
+        let names = |has_wayland| {
+            linux_clipboard_tools(has_wayland)
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(true), ["wl-copy", "xclip", "xsel", "pbcopy"]);
+        assert_eq!(names(false), ["xclip", "xsel", "pbcopy"]);
     }
 
     #[test]
