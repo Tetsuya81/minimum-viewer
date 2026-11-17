@@ -63,7 +63,7 @@ make run    # nix develop -c cargo run
 - `rename` は `rename <new_name>`。選択中エントリ名を同一ディレクトリ内で変更
 - `yank` は `yank [path]`。選択中エントリ（または指定パス）をクリップボードへコピー
   - macOS: `pbcopy` を使用
-  - Linux: `wl-copy` / `xclip` / `xsel` を順に試みる
+  - Linux: `wl-copy` / `xclip` / `xsel` / `pbcopy` を順に試みる（`pbcopy` は利用者が用意した macOS 互換コマンド向け）
   - SSH セッション上でこれらが使えない場合は OSC 52 エスケープシーケンスでローカル端末へ転送
   - OSC 52 を使うには接続元ターミナルの設定が必要（tmux では `set -g set-clipboard on` 等）
 
