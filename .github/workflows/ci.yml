@@ -8,7 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted", "linux", "ARM64"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,3 +25,17 @@ jobs:
 
       - name: Run tests
         run: nix develop -c cargo test
+
+  # Ubuntu 26.04 with the distro-packaged Rust toolchain.
+  ubuntu-2604:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cargo
+
+      - name: Run tests
+        run: cargo test
