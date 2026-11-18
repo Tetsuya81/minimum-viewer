@@ -7,8 +7,13 @@ on:
       - master
 
 jobs:
-  test:
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted", "linux", "ARM64"]') }}
+  test-os:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,3 +26,14 @@ jobs:
 
       - name: Run tests
         run: nix develop -c cargo test
+
+  # Single check named "test" for the master ruleset's required status check.
+  test:
+    if: always()
+    needs: test-os
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "test-os: ${{ needs.test-os.result }}"
+          test "${{ needs.test-os.result }}" = success
