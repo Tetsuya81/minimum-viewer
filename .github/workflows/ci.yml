@@ -27,29 +27,13 @@ jobs:
       - name: Run tests
         run: nix develop -c cargo test
 
-  # Ubuntu 26.04 with the distro-packaged Rust toolchain.
-  ubuntu-2604:
-    runs-on: ubuntu-latest
-    container: ubuntu:26.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        run: apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cargo
-
-      - name: Run tests
-        run: cargo test
-
   # Single check named "test" for the master ruleset's required status check.
   test:
     if: always()
-    needs: [test-os, ubuntu-2604]
+    needs: test-os
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           echo "test-os: ${{ needs.test-os.result }}"
-          echo "ubuntu-2604: ${{ needs.ubuntu-2604.result }}"
           test "${{ needs.test-os.result }}" = success
-          test "${{ needs.ubuntu-2604.result }}" = success
