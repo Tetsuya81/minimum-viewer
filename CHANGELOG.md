@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10](https://github.com/Tetsuya81/minimum-viewer/compare/v0.1.9...v0.1.10) - 2026-11-18
+
+### Other
+
+- drop the Ubuntu 26.04 container job
+- add aggregate test job for the required status check
+- run all jobs on GitHub-hosted runners
+
 ## [0.1.9](https://github.com/Tetsuya81/minimum-viewer/compare/v0.1.8...v0.1.9) - 2026-11-17
 
 ### Added
